@@ -1,17 +1,73 @@
-# Nextflow
-.nextflow/
+############################################################
+# Nextflow runtime
+############################################################
 work/
+.nextflow/
 .nextflow.log*
+.init.done
 
-# Data and databases
-database/
+############################################################
+# Logs gerados em execução
+############################################################
+logs/*
+!logs/.gitkeep
+
+############################################################
+# Runtime data (NÃO versionar)
+############################################################
+
+# Sequencing data
 reads/
-input/
-results/
-logs/
 
-# Outputs
-*.html
-*.xlsx
-*.csv
-*.pdf
+# Real user inputs (allow only template)
+input/*
+!input/input_table.xlsx
+
+# Analysis outputs
+results/
+
+############################################################
+# Databases (runtime / large / regenerable)
+############################################################
+
+# Kaiju and other large DBs
+database/kaiju/
+
+# Future DBs (keep references only)
+database/snpeff/
+database/bwa_index/
+
+############################################################
+# OS / editor junk
+############################################################
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+
+############################################################
+# Python / Conda / environments
+############################################################
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.conda
+*.mamba
+
+############################################################
+# Allow versioned reference & assets
+############################################################
+!database/omsCatalog/
+!database/omsCatalog/**
+!database/mtbRef/
+!database/mtbRef/**
+
+!assets/
+!assets/**
+assets/tools/
+
+!bin/
+!bin/**
+
