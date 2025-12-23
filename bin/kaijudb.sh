@@ -83,11 +83,18 @@ verify_archive() {
 download_database() {
     echo "[DB] Downloading Kaiju DB from Zenodo..."
 
-    if command -v wget >/dev/null; then
-        wget -O "$DB_TAR" "$ZENODO_URL"
-    else
-        curl -L -o "$DB_TAR" "$ZENODO_URL"
-    fi
+    for i in {1..3}; do
+        echo "[DB] Attempt $i/3"
+        if command -v wget >/dev/null; then
+            wget -O "$DB_TAR" "$ZENODO_URL" && return 0
+        else
+            curl -L -o "$DB_TAR" "$ZENODO_URL" && return 0
+        fi
+        sleep 10
+    done
+
+    echo "[DB] Download failed after multiple attempts."
+    return 1
 }
 
 # ------------------ EXTRACT DATABASE ------------------------
