@@ -2,42 +2,59 @@
 # ============================================================
 # brseqtb - Initial pipeline setup
 #
-# This script:
-#  - Creates the persistent directory structure
-#  - Is safe to run multiple times (idempotent)
-#  - Intentionally writes outside Nextflow work/
+# This script prepares the runtime environment only.
+# All distributed resources (assets, references, templates)
+# are versioned in the Git repository and MUST already exist.
 #
-# This script is the single source of truth for filesystem
-# state during the installation phase.
+# This script is safe to run multiple times (idempotent).
 # ============================================================
 
 set -euo pipefail
 
 ROOT_DIR="$(pwd)"
 
-echo "[INFO] Initializing brseqtb pipeline in:"
+echo "[INFO] Initializing brseqtb runtime environment in:"
 echo "       ${ROOT_DIR}"
 echo
 
 # ------------------------------------------------------------
-# Create directory structure (persistent, user-visible)
+# Sanity checks — required versioned resources
 # ------------------------------------------------------------
-echo "[INFO] Creating directory structure..."
+echo "[INFO] Checking required versioned resources..."
+
+required_paths=(
+    "database/omsCatalog/WHO-UCN-TB-2023.7-eng.xlsx"
+    "database/mtbRef/NC0009623.fasta"
+    "database/mtbRef/forbidden_genes.txt"
+    "assets/templates/report_template.docx"
+    "input/input_table.xlsx"
+)
+
+for p in "${required_paths[@]}"; do
+    if [[ ! -e "$p" ]]; then
+        echo "[ERROR] Required file not found: $p"
+        echo "        Did you clone the repository correctly?"
+        exit 1
+    fi
+done
+
+echo "[OK] All required versioned resources found"
+echo
+
+# ------------------------------------------------------------
+# Create runtime directories (NOT versioned)
+# ------------------------------------------------------------
+echo "[INFO] Creating runtime directories..."
 
 mkdir -p \
-    bin \
     database/kaiju/db \
-    database/omsCatalog \
-    database/mtbRef \
-    assets/demo \
-    assets/templates \
     assets/tools \
     reads \
-    input \
-    results \
     logs
 
-echo "[OK] Directory structure ensured"
+echo "[OK] Runtime directories ready"
 echo
+
+echo "[SUCCESS] brseqtb runtime initialization completed"
 
 
