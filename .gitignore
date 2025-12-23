@@ -1,0 +1,17 @@
+# Nextflow
+.nextflow/
+work/
+.nextflow.log*
+
+# Data and databases
+database/
+reads/
+input/
+results/
+logs/
+
+# Outputs
+*.html
+*.xlsx
+*.csv
+*.pdf
