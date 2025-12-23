@@ -28,6 +28,7 @@ mkdir -p \
     assets/tools \
     reads \
     input \
+    logs
 
 
 echo "[OK] Directories created"
