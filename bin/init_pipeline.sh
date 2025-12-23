@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # ============================================================
 # brseqtb - Initial pipeline setup
-# - Create directory structure
-# - Run one-time preparation scripts
+#
+# This script:
+#  - Creates the persistent directory structure
+#  - Is safe to run multiple times (idempotent)
+#  - Intentionally writes outside Nextflow work/
+#
+# This script is the single source of truth for filesystem
+# state during the installation phase.
 # ============================================================
 
 set -euo pipefail
@@ -14,7 +20,7 @@ echo "       ${ROOT_DIR}"
 echo
 
 # ------------------------------------------------------------
-# 1. Create directory structure
+# Create directory structure (persistent, user-visible)
 # ------------------------------------------------------------
 echo "[INFO] Creating directory structure..."
 
@@ -28,10 +34,10 @@ mkdir -p \
     assets/tools \
     reads \
     input \
+    results \
     logs
 
-
-echo "[OK] Directories created"
-
+echo "[OK] Directory structure ensured"
+echo
 
 
