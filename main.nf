@@ -1,13 +1,6 @@
 nextflow.enable.dsl = 2
 
-/*
- * brseqtb — installation / preparation workflow
- *
- * This workflow intentionally performs side-effects
- * in the project root directory (outside work/).
- *
- * Nextflow is used only as an orchestrator.
- */
+params.add_kaiju_manually = false
 
 process INIT_PIPELINE {
 
@@ -20,7 +13,19 @@ process INIT_PIPELINE {
     """
 }
 
+process KAIJU_DB {
+
+    tag "kaiju-db"
+
+    script:
+    """
+    cd ${projectDir}
+    bash bin/kaijudb.sh ${params.add_kaiju_manually}
+    """
+}
+
 workflow {
     INIT_PIPELINE()
+    KAIJU_DB()
 }
 
