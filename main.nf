@@ -24,8 +24,24 @@ process KAIJU_DB {
     """
 }
 
+process OMS_CATALOG {
+
+    tag "oms-catalog"
+
+    script:
+    """
+    cd ${projectDir}
+    python3 bin/omsCatalog.py
+    """
+}
+
 workflow {
+
+    /*
+     * Mandatory initialization order
+     */
     INIT_PIPELINE()
     KAIJU_DB()
+    OMS_CATALOG()
 }
 
