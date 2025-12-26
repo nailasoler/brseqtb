@@ -70,19 +70,19 @@ All modules are idempotent and can be safely re-executed if needed.
   Creates the runtime directory structure and validates the presence of versioned reference files.  
   This is always the first step of the pipeline.
 
-- **kaijudb.sh**  
+- **kaijudb**  
   Prepares the Kaiju Mycobacterium database.  
   By default, the database is downloaded automatically from Zenodo, verified by checksum, and extracted.  
   A manual mode is available for offline or HPC environments.
 
-- **omsCatalog.py**  
+- **omsCatalog**  
   Processes the WHO TB Drug Resistance Catalogue Excel file and generates derived BED and CSV files used by downstream analyses.  
   If all expected output files already exist, execution is skipped.
 
-- **bwaref.sh**  
+- **bwaref**  
   Prepares the reference genome for BWA by building the required index files if they are missing.
 
-- **gatkdict.sh**  
+- **gatkdict**  
   Prepares the reference genome for GATK by creating the FASTA index (.fai) and the sequence dictionary (.dict) if they are missing.
 
 ---
@@ -95,4 +95,61 @@ Running the pipeline without additional parameters executes all setup modules in
 
 ```bash
 nextflow run main.nf
+```
+
+## Pipeline Parameters
+
+The initialization stage of **brseqtb** can be executed fully or partially using command-line parameters.  
+All parameters are optional unless explicitly stated.
+
+### Module Selection Parameters
+
+These parameters control which setup modules are executed.
+
+- **--run_init**  
+  Runs the `init_pipeline` module.  
+  This module creates the runtime directory structure and validates versioned resources.  
+  Default: true
+
+- **--run_kaijudb**  
+  Runs the `kaijudb` module to prepare the Kaiju Mycobacterium database.  
+  Default: true
+
+- **--run_omsCatalog**  
+  Runs the OMS TB Drug Resistance Catalogue processing module.  
+  Default: true
+
+- **--run_bwaref**  
+  Runs the BWA reference preparation module (BWA index creation).  
+  Default: true
+
+- **--run_gatkdict**  
+  Runs the GATK reference preparation module (FASTA index and sequence dictionary).  
+  Default: true
+
+Any module can be disabled by explicitly setting its parameter to `false`.
+
+---
+
+### Kaiju Database Parameters
+
+- **--add_kaiju_manually**  
+  Controls how the Kaiju database is prepared.
+
+  - false (default):  
+    The Kaiju database is downloaded automatically from Zenodo, verified by checksum, and extracted.
+
+  - true:  
+    Indicates that the user has manually placed the Kaiju database archive or files in the expected directory.  
+    The pipeline will validate and extract the database without attempting a download.
+
+---
+
+### Examples
+
+Run all initialization modules (default behavior):
+
+```bash
+nextflow run main.nf
+```
 
