@@ -59,6 +59,7 @@ Clone the repository:
 ```bash
 git clone https://github.com/nailasoler/brseqtb.git
 cd brseqtb
+```
 
 ## One-Time Setup Modules
 
