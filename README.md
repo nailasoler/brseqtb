@@ -153,3 +153,50 @@ Run all initialization modules (default behavior):
 nextflow run main.nf
 ```
 
+Run only the initial directory setup:
+
+```bash
+nextflow run main.nf --run init
+```
+
+Run only the Kaiju database preparation (automatic download):
+
+```bash
+nextflow run main.nf --run kaiju
+```
+
+Run only the Kaiju database preparation using a manually provided database:
+
+```bash
+nextflow run main.nf --run kaiju --add_kaiju_manually true
+```
+
+Run only the OMS TB Drug Resistance Catalogue processing:
+
+```bash
+nextflow run main.nf --run oms
+```
+
+Run only reference preparation for BWA:
+
+```bash
+nextflow run main.nf --run bwaref
+```
+
+Run only reference preparation for GATK:
+
+```bash
+nextflow run main.nf --run gatkdict
+```
+
+Run multiple modules in a custom combination:
+
+```bash
+nextflow run main.nf --run init,oms,bwaref
+```
+
+Run reference-related modules only (BWA + GATK):
+
+```bash
+nextflow run main.nf --run bwaref,gatkdict
+```
