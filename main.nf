@@ -3,24 +3,17 @@ nextflow.enable.dsl = 2
 /*
  * Parameters
  */
-params.run = null                  // e.g. init,kaiju,oms
+params.run = null                  // e.g. kaiju,oms,bwaref
 params.add_kaiju_manually = false
 
 /*
  * Processes
  */
 
-process INIT_PIPELINE {
-    tag "init"
-    script:
-    """
-    cd ${projectDir}
-    bash bin/init_pipeline.sh
-    """
-}
-
 process KAIJU_DB {
+
     tag "kaiju-db"
+
     script:
     """
     cd ${projectDir}
@@ -29,7 +22,9 @@ process KAIJU_DB {
 }
 
 process OMS_CATALOG {
+
     tag "oms-catalog"
+
     script:
     """
     cd ${projectDir}
@@ -38,7 +33,9 @@ process OMS_CATALOG {
 }
 
 process BWA_REF {
+
     tag "bwa-ref"
+
     script:
     """
     cd ${projectDir}
@@ -47,7 +44,9 @@ process BWA_REF {
 }
 
 process GATK_DICT {
+
     tag "gatk-dict"
+
     script:
     """
     cd ${projectDir}
@@ -62,24 +61,19 @@ process GATK_DICT {
 workflow {
 
     // Default full chain
-    def full = ['init', 'kaiju', 'oms', 'bwaref', 'gatkdict']
+    def full = ['kaiju', 'oms', 'bwaref', 'gatkdict']
 
     // Parse user selection
     def steps = params.run
         ? params.run.split(',')*.trim()
         : full
 
-    // Validate
-    def valid = ['init', 'kaiju', 'oms', 'bwaref', 'gatkdict']
+    // Validate requested modules
+    def valid = ['kaiju', 'oms', 'bwaref', 'gatkdict']
     def invalid = steps.findAll { !valid.contains(it) }
 
     if ( invalid ) {
         error "Invalid module(s) in --run: ${invalid.join(', ')}"
-    }
-
-    // Enforce init first if present
-    if ( steps.contains('init') ) {
-        INIT_PIPELINE()
     }
 
     // Execute requested modules in order

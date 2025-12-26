@@ -7,7 +7,7 @@ work/
 .init.done
 
 ############################################################
-# Logs gerados em execução
+# Logs (keep directory, ignore contents)
 ############################################################
 logs/*
 !logs/.gitkeep
@@ -16,8 +16,9 @@ logs/*
 # Runtime data (NÃO versionar)
 ############################################################
 
-# Sequencing data
-reads/
+# Sequencing data (keep directory, ignore contents)
+reads/*
+!reads/.gitkeep
 
 # Real user inputs (allow only template)
 input/*
@@ -30,8 +31,10 @@ results/
 # Databases (runtime / large / regenerable)
 ############################################################
 
-# Kaiju and other large DBs
-database/kaiju/
+# Kaiju database (keep structure, ignore contents)
+database/kaiju/*
+!database/kaiju/db/
+!database/kaiju/db/.gitkeep
 
 # Future DBs (keep references only)
 database/snpeff/
@@ -64,10 +67,16 @@ __pycache__/
 !database/mtbRef/
 !database/mtbRef/**
 
-!assets/
-!assets/**
-assets/tools/
+# Assets (keep structure, ignore runtime tools content)
+assets/*
+!assets/demo/
+!assets/templates/
+!assets/tools/
+assets/tools/*
+!assets/tools/.gitkeep
 
+############################################################
+# Scripts
+############################################################
 !bin/
 !bin/**
-
