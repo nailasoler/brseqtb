@@ -15,16 +15,23 @@ process MICROMAMBA_SETUP {
 
     tag "micromamba-setup"
 
+    output:
+        path "micromamba_ready.txt"
+
     script:
     """
     cd ${projectDir}
     bash bin/micromamba_setup.sh
+    echo OK > micromamba_ready.txt
     """
 }
 
 process KAIJU_DB {
 
     tag "kaiju-db"
+
+    input:
+        path micromamba_ready
 
     script:
     """
@@ -37,6 +44,9 @@ process OMS_CATALOG {
 
     tag "oms-catalog"
 
+    input:
+        path micromamba_ready
+
     script:
     """
     cd ${projectDir}
@@ -48,6 +58,9 @@ process BWA_REF {
 
     tag "bwa-ref"
 
+    input:
+        path micromamba_ready
+
     script:
     """
     cd ${projectDir}
@@ -58,6 +71,9 @@ process BWA_REF {
 process GATK_DICT {
 
     tag "gatk-dict"
+
+    input:
+        path micromamba_ready
 
     script:
     """
@@ -88,8 +104,12 @@ workflow {
     }
 
     // Always run micromamba setup first (unless disabled)
+    def micromamba_ready_ch = null
     if ( params.setup_micromamba ) {
-        MICROMAMBA_SETUP()
+        micromamba_ready_ch = MICROMAMBA_SETUP()
+    } else {
+        // fallback marker if user disables setup (expects env already configured)
+        micromamba_ready_ch = Channel.fromPath("${projectDir}/micromamba_ready.txt", checkIfExists: false)
     }
 
     // Execute requested modules in order
@@ -99,16 +119,16 @@ workflow {
                 // already handled above; keep for user visibility
                 break
             case 'kaiju':
-                KAIJU_DB()
+                KAIJU_DB(micromamba_ready_ch)
                 break
             case 'oms':
-                OMS_CATALOG()
+                OMS_CATALOG(micromamba_ready_ch)
                 break
             case 'bwaref':
-                BWA_REF()
+                BWA_REF(micromamba_ready_ch)
                 break
             case 'gatkdict':
-                GATK_DICT()
+                GATK_DICT(micromamba_ready_ch)
                 break
         }
     }
