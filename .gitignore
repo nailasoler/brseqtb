@@ -7,6 +7,13 @@ work/
 .init.done
 
 ############################################################
+# Micromamba runtime (NÃO versionar)
+############################################################
+.micromamba/
+.mamba/
+bin/micromamba
+
+############################################################
 # Logs (keep directory, ignore contents)
 ############################################################
 logs/*
@@ -33,12 +40,10 @@ results/
 
 # Kaiju database (keep structure, ignore contents)
 database/kaiju/*
+!database/kaiju/
 !database/kaiju/db/
 database/kaiju/db/*
 !database/kaiju/db/.gitkeep
-
-# Future DBs (keep references only)
-
 
 ############################################################
 # OS / editor junk
@@ -50,24 +55,30 @@ Thumbs.db
 *.tmp
 
 ############################################################
-# Python / Conda / environments
+# Python caches
 ############################################################
 __pycache__/
 *.pyc
 *.pyo
+
+############################################################
+# Env files / conda artifacts (NÃO versionar)
+############################################################
 .env
 *.conda
 *.mamba
 
 ############################################################
-# Allow versioned reference & assets
+# Keep versioned reference & assets
 ############################################################
 !database/omsCatalog/
 !database/omsCatalog/**
 !database/mtbRef/
 !database/mtbRef/**
 
+############################################################
 # Assets (keep structure, ignore runtime tools content)
+############################################################
 assets/*
 !assets/demo/
 !assets/templates/
@@ -76,7 +87,9 @@ assets/tools/*
 !assets/tools/.gitkeep
 
 ############################################################
-# Scripts
+# Keep scripts and env definitions
 ############################################################
 !bin/
 !bin/**
+!envs/
+!envs/**

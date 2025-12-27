@@ -1,0 +1,47 @@
+name: brseqtb
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+channel_priority: strict
+dependencies:
+  - python=3.10
+  - pip
+
+  # core utils
+  - bc
+  - curl
+  - wget
+  - unzip
+
+  # hts / alignment / callers (versões compatíveis com ncurses atuais)
+  - bwa=0.7.17
+  - samtools=1.18
+  - bcftools=1.18
+  - htslib=1.18
+  - delly
+  - lofreq
+  - vt=2015.11.10
+
+  # java tools
+  - openjdk=17
+  - gatk4
+  - picard
+  - snpeff=5.2
+
+  # qc / phylo / tax
+  - fastqc
+  - trimmomatic
+  - iqtree
+  - kaiju
+
+  # python libs
+  - numpy
+  - pandas
+  - networkx
+  - biopython
+  - pysam
+  - openpyxl
+  - xlsxwriter
+  - python-docx
+
