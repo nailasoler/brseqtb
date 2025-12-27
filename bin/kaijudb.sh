@@ -16,14 +16,13 @@
 set -euo pipefail
 
 ADD_MANUAL="${1:-false}"
-
 DB_DIR="database/kaiju/db"
-DB_TAR="database/kaiju/kaiju_mycobacterium.tar.gz"
-ZENODO_URL="https://zenodo.org/records/17554952/files/kaiju_mycobacterium.tar.gz"
 
-EXPECTED_SHA256="e74e76382f189ec87abd294000f17a044d367f971b665807f2b7e5ce7cc795e2"
+DB_TAR="database/kaiju/db.tar.gz"
+ZENODO_URL="https://zenodo.org/records/18064127/files/db.tar.gz"
+EXPECTED_SHA256="74b05e77a5b43a4d0e6c81cc1dfe826596458889fec3b874ecd2a27a0a36eab6"
 
-mkdir -p "$DB_DIR"
+
 mkdir -p "$(dirname "$DB_TAR")"
 
 # ------------------ VERIFY DATABASE -------------------------
@@ -101,17 +100,14 @@ download_database() {
 extract_database() {
     echo "[DB] Extracting Kaiju DB..."
 
+    mkdir -p "$DB_DIR"
     rm -rf "${DB_DIR:?}"/*
 
-    tar --strip-components=5 -xzf "$DB_TAR" -C "$DB_DIR" 2>/dev/null || \
-    tar --strip-components=4 -xzf "$DB_TAR" -C "$DB_DIR" 2>/dev/null || \
-    tar -xzf "$DB_TAR" -C "$DB_DIR"
-    
-    # Remove temporary extraction artifacts
-    rm -rf "${DB_DIR}/_tmp"
+    tar --strip-components=1 -xzf "$DB_TAR" -C "$DB_DIR"
 
     echo "[DB] Extraction complete."
 }
+
 
 # ---------------------- MAIN --------------------------------
 echo "[DB] Checking Kaiju database..."
@@ -146,6 +142,6 @@ verify_database || {
     exit 1
 }
 
-echo "[DB] Kaiju database ready:"
-ls -lh "$DB_DIR"
+echo "[DB] Kaiju database ready in: $DB_DIR"
+
 

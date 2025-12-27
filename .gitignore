@@ -34,11 +34,11 @@ results/
 # Kaiju database (keep structure, ignore contents)
 database/kaiju/*
 !database/kaiju/db/
+database/kaiju/db/*
 !database/kaiju/db/.gitkeep
 
 # Future DBs (keep references only)
-database/snpeff/
-database/bwa_index/
+
 
 ############################################################
 # OS / editor junk
