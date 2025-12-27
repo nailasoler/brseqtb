@@ -51,9 +51,10 @@ process OMS_CATALOG {
     script:
     """
     cd ${projectDir}
-    python3 bin/omsCatalog.py
+    "${projectDir}/.micromamba/envs/brseqtb/bin/python" bin/omsCatalog.py
     """
 }
+
 
 process BWA_REF {
 
