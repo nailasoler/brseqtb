@@ -20,9 +20,10 @@ process MICROMAMBA_SETUP {
 
     script:
     """
+    WORKDIR="\$PWD"
     cd ${projectDir}
     bash bin/micromamba_setup.sh
-    echo OK > ${PWD}/micromamba_ready.txt
+    echo OK > "\$WORKDIR/micromamba_ready.txt"
     """
 }
 
