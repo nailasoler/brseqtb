@@ -22,7 +22,7 @@ process MICROMAMBA_SETUP {
     """
     cd ${projectDir}
     bash bin/micromamba_setup.sh
-    echo OK > micromamba_ready.txt
+    echo OK > ${PWD}/micromamba_ready.txt
     """
 }
 
@@ -108,7 +108,6 @@ workflow {
     if ( params.setup_micromamba ) {
         micromamba_ready_ch = MICROMAMBA_SETUP()
     } else {
-        // fallback marker if user disables setup (expects env already configured)
         micromamba_ready_ch = Channel.fromPath("${projectDir}/micromamba_ready.txt", checkIfExists: false)
     }
 
