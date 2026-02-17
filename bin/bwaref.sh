@@ -13,13 +13,14 @@ REF="${REF_DIR}/NC0009623.fasta"
 # ===================== CHECK REFERENCE =====================
 if [[ ! -f "$REF" ]]; then
     echo "[ERROR] Reference genome not found: ${REF}"
-    echo "[HINT] The reference FASTA must already exist in the project."
     exit 1
 fi
 
-# ===================== DEPENDENCY CHECK =====================
-if ! command -v bwa >/dev/null 2>&1; then
-    echo "[ERROR] bwa not found in PATH."
+# ===================== BWA ABSOLUTE PATH =====================
+BWA="$(pwd)/.micromamba/envs/brseqtb/bin/bwa"
+
+if [[ ! -x "$BWA" ]]; then
+    echo "[ERROR] bwa binary not found at: $BWA"
     exit 1
 fi
 
@@ -35,10 +36,11 @@ INDEX_FILES=(
 if [[ -f "${INDEX_FILES[0]}" ]]; then
     echo "[OK] BWA index already present for ${REF}"
 else
-    echo "[INFO] BWA index not found. Building index..."
-    bwa index "$REF"
+    echo "[INFO] Building BWA index..."
+    "$BWA" index "$REF"
     echo "[OK] BWA index created."
 fi
 
-echo "[DONE] Reference is ready for BWA."
+echo "[DONE] Reference ready."
+
 
