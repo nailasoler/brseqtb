@@ -111,7 +111,7 @@ if "${MICROMAMBA_BIN}" env list | awk '{print $1}' | grep -qx "${ENV_NAME}"; the
   echo "[MICROMAMBA] Environment exists: ${ENV_NAME} — reusing (no update)"
 else
   echo "[MICROMAMBA] Creating environment: ${ENV_NAME}"
-  "${MICROMAMBA_BIN}" create -n "${ENV_NAME}" -f "${ENV_YAML}" -y
+  "${MICROMAMBA_BIN}" env create -n "${ENV_NAME}" -f "${ENV_YAML}" -y
 fi
 
 echo "[MICROMAMBA] Done."
