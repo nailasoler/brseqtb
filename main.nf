@@ -118,7 +118,7 @@ process OMS_CATALOG {
     script:
     """
     cd "${projectDir}"
-    python bin/omsCatalog.py
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python bin/omsCatalog.py
     """
 }
 
@@ -168,7 +168,7 @@ process MAKE_MANIFEST_VALIDATE {
 
     script:
     """
-    python ${projectDir}/bin/make_manifest_validate.py \
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/make_manifest_validate.py \
         --xlsx ${input_table} \
         --reads ${reads_dir} \
         --out manifest.tsv
@@ -407,7 +407,7 @@ process TBDR_RCOV {
 
     script:
     """
-    python ${projectDir}/bin/tbdrRCov.py "${biosample}"
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/tbdrRCov.py "${biosample}"
 
     mkdir -p tbdrRCov
     cp -r ${projectDir}/tbdrRCov/${biosample} tbdrRCov/
@@ -446,7 +446,7 @@ process LINEAGE {
 
     script:
     """
-    python ${projectDir}/bin/lineage.py "${biosample}"
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/lineage.py "${biosample}"
 
     mkdir -p lineage
     cp -r ${projectDir}/lineage/${biosample} lineage/
@@ -487,7 +487,7 @@ process COHORT_FILTER {
 
     script:
     """
-    python ${projectDir}/bin/cohortFilter.py
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/cohortFilter.py
 
     mkdir -p cohort_filtered
     cp -r ${projectDir}/cohort_filtered/* cohort_filtered/ || true
@@ -516,7 +516,7 @@ process SNP_MATRIX {
 
     script:
     """
-    python ${projectDir}/bin/snpMatrix.py
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/snpMatrix.py
     """
 }
 
@@ -536,7 +536,7 @@ process TRANSMISSION {
 
     script:
     """
-    python ${projectDir}/bin/transmission.py
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/transmission.py
 
     mkdir -p transmission
     cp -r ${projectDir}/transmission/* transmission/ || true
@@ -587,7 +587,7 @@ process MIXINFECTION {
 
     script:
     """
-    python ${projectDir}/bin/mixInfection.py ${biosample}
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/mixInfection.py ${biosample}
 
     mkdir -p mixInfection/${biosample}
     cp -r ${projectDir}/mixInfection/${biosample}/* mixInfection/${biosample}/ || true
@@ -606,7 +606,7 @@ process RESISTANCE_TARGET {
 
     script:
     """
-    python ${projectDir}/bin/resistanceTarget.py "${biosample}"
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/resistanceTarget.py "${biosample}"
 
     cp ${projectDir}/resistance/${biosample}/${biosample}_OMStarget.xlsx .
     """
@@ -628,7 +628,7 @@ process RESISTANCE_REPORT {
     """
     BIOSAMPLE=\$(basename "${omstarget}" _OMStarget.xlsx)
 
-    python ${projectDir}/bin/resistanceReport.py "\$BIOSAMPLE"
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/resistanceReport.py "\$BIOSAMPLE"
 
     cp ${projectDir}/results/resistance/\$BIOSAMPLE.xlsx .
     """
@@ -652,7 +652,7 @@ process RESISTANCE_SUMMARY {
 
     script:
     """
-    python ${projectDir}/bin/resistanceSummary.py
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/resistanceSummary.py
     """
 }
 
@@ -668,7 +668,7 @@ process QC_SUMMARY {
 
     script:
     """
-    python ${projectDir}/bin/qcSummary.py
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/qcSummary.py
     """
 }
 
@@ -691,7 +691,7 @@ process CLINICAL_REPORT {
 
     script:
     """
-    python ${projectDir}/bin/clinicalReport.py ${biosample}
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/clinicalReport.py ${biosample}
 
     mkdir -p clinicalReport
     cp ${projectDir}/results/clinicalReport/${biosample}.docx clinicalReport/
@@ -706,12 +706,6 @@ process CLINICAL_REPORT {
  */
 
 workflow {
-
-    /*
-    * ========================================================
-    * BLOCK 1 — INIT CHAIN
-    * ========================================================
-    */
 
     def ch_init = Channel.value(true)
 
@@ -731,294 +725,89 @@ workflow {
         ch_reads_dir
     )
 
-
-    /*
-    * ========================================================
-    * BLOCK 2 — PREPROCESS (fan-out per biosample)
-    * ========================================================
-    */
-
-    // extract biosample IDs from manifest
     def ch_biosamples = ch_manifest
         .splitCsv(header: true, sep: '\t')
         .map { row -> row.biosample }
 
-    // FASTQC
     ch_biosamples
         .combine(ch_init)
         | FASTQC
 
-    // TRIMMOMATIC (anchor of block 2)
     def ch_trim = ch_biosamples
         .combine(ch_init)
         | TRIMMOMATIC
 
-    // BWA and KAIJU depend on TRIMMOMATIC
     def ch_bwa   = ch_trim | BWA
     def ch_kaiju = ch_trim | KAIJU
-
-    /*
-    * ========================================================
-    * BLOCK 2 — GLOBAL BARRIER
-    * ========================================================
-    */
 
     def ch_block2_done = ch_trim
         .collect()
         .map { true }
 
-    /*
-    * ========================================================
-    * BLOCK 3 — VARIANT CALLERS (fan-out per biosample)
-    * ========================================================
-    */
-
-    /*
-    * DELLY — per biosample
-    */
-    def ch_delly = ch_bwa | DELLY
-
-    /*
-    * LOFREQ — per biosample
-    */
-    def ch_lofreq = ch_bwa | LOFREQ
-
-    /*
-    * GATK GVCF — per biosample
-    */
-    def ch_gatk_gvcf = ch_bwa | GATK_GVCF
-
-    /*
-    * GATK VCF — per biosample
-    * (independente do GVCF, conforme sua definição)
-    */
-    def ch_gatk_vcf = ch_bwa | GATK_VCF
-
-    /*
-    * NORM — OBRIGATORIAMENTE após GATK_VCF
-    */
-    def ch_norm = ch_gatk_vcf | NORM
-
-
-    /*
-    * ========================================================
-    * BLOCK 3 — GLOBAL BARRIER
-    * Ensures ALL variant callers are finished
-    * ========================================================
-    */
+    def ch_delly      = ch_bwa | DELLY
+    def ch_lofreq     = ch_bwa | LOFREQ
+    def ch_gatk_gvcf  = ch_bwa | GATK_GVCF
+    def ch_gatk_vcf   = ch_bwa | GATK_VCF
+    def ch_norm       = ch_gatk_vcf | NORM
 
     def ch_block3_done = ch_norm
         .collect()
         .map { true }
 
-
-    /*
-    * ========================================================
-    * BLOCK 4 — ANNOTATION / FILTERING / COHORT
-    * ========================================================
-    */
-
-    /*
-    * SNPEFF — per biosample
-    * (usa BWA como âncora)
-    */
-    def ch_snpeff = ch_bwa | SNPEFF
-
-    /*
-    * TBDR_RCOV — per biosample
-    */
-    def ch_tbdr_rcov = ch_biosamples | TBDR_RCOV
-
-    /*
-    * NTM_FILTER — per biosample
-    */
-    def ch_ntm_filter = ch_biosamples | NTM_FILTER
-
-    /*
-    * LINEAGE — per biosample
-    */
-    def ch_lineage = ch_biosamples | LINEAGE
-
-
-    /*
-    * ========================================================
-    * BLOCK 4 — GLOBAL BARRIER (per-biosample steps)
-    * Ensures ALL per-sample annotations are finished
-    *
-    * NOTE:
-    * We do NOT merge ChannelOut objects.
-    * The barrier is anchored on ch_biosamples,
-    * which is fully consumed by all per-sample processes.
-    * ========================================================
-    */
+    def ch_snpeff      = ch_bwa | SNPEFF
+    def ch_tbdr_rcov   = ch_biosamples | TBDR_RCOV
+    def ch_ntm_filter  = ch_biosamples | NTM_FILTER
+    def ch_lineage     = ch_biosamples | LINEAGE
 
     def ch_block4_samples_done = ch_biosamples
         .collect()
         .map { true }
 
-
-    /*
-    * ========================================================
-    * COHORT — runs once for the entire manifest
-    * ========================================================
-    */
-
     def ch_cohort = ch_block4_samples_done | COHORT
-
-
-    /*
-    * ========================================================
-    * COHORT FILTER — must run AFTER COHORT
-    * ========================================================
-    */
-
     def ch_cohort_filtered = ch_cohort | COHORT_FILTER
-
-
-    /*
-    * ========================================================
-    * BLOCK 4 — FINAL BARRIER
-    * Everything downstream must wait for this
-    * ========================================================
-    */
 
     def ch_block4_done = ch_cohort_filtered
         .collect()
         .map { true }
 
-    /*
-    * ========================================================
-    * BLOCK 5 — PHYLOGENY / TRANSMISSION
-    * ========================================================
-    */
+    def ch_snp_matrix_done = ch_block4_done | SNP_MATRIX
+    def ch_transmission    = ch_snp_matrix_done | TRANSMISSION
+    def ch_iqtree          = ch_snp_matrix_done | IQTREE
 
-    /*
-    * SNP_MATRIX — coorte
-    * Roda UMA vez
-    */
-    def ch_snp_matrix_done = ch_block4_done \
-        | SNP_MATRIX
-
-
-    /*
-    * TRANSMISSION — coorte
-    * OBRIGATORIAMENTE após SNP_MATRIX
-    */
-    def ch_transmission = ch_snp_matrix_done \
-        | TRANSMISSION
-
-
-    /*
-    * IQTREE — coorte
-    * OBRIGATORIAMENTE após SNP_MATRIX
-    */
-    def ch_iqtree = ch_snp_matrix_done \
-        | IQTREE
-
-
-    /*
-    * ========================================================
-    * BLOCK 5 — FINAL BARRIER
-    * Tudo downstream espera aqui
-    * ========================================================
-    */
     def ch_block5_done = ch_snp_matrix_done
         .collect()
         .map { true }
 
-    /*
-    * ========================================================
-    * BLOCK 6 — MIXED INFECTION / RESISTANCE PROFILING
-    * ========================================================
-    */
-
-    /*
-    * MIXINFECTION — per biosample
-    */
     def ch_mixinfection = ch_biosamples
         .combine(ch_block5_done)
         .map { biosample, _ -> biosample }
         | MIXINFECTION
 
-
-    /*
-    * RESISTANCE TARGET — per biosample
-    * PRODUZ _OMStarget.xlsx
-    */
     def ch_resistance_target = ch_biosamples
         .combine(ch_block5_done)
         .map { biosample, _ -> biosample }
         | RESISTANCE_TARGET
 
+    def ch_resistance_report = ch_resistance_target | RESISTANCE_REPORT
 
-    /*
-    * RESISTANCE REPORT — per biosample
-    * DEPENDÊNCIA REAL NO ARQUIVO
-    */
-    def ch_resistance_report = ch_resistance_target \
-        | RESISTANCE_REPORT
-
-
-    /*
-    * FINAL BARRIER
-    */
     def ch_block6_done = ch_resistance_report
         .collect()
         .map { true }
 
-    /*
-    * ========================================================
-    * BLOCK 7 — SUMMARY (coorte)
-    * ========================================================
-    */
+    def ch_resistance_summary_done = ch_block6_done | RESISTANCE_SUMMARY
+    def ch_qc_summary_done         = ch_resistance_summary_done | QC_SUMMARY
 
-    /*
-    * RESISTANCE SUMMARY — coorte
-    */
-    def ch_resistance_summary_done = ch_block6_done \
-        | RESISTANCE_SUMMARY
-
-
-    /*
-    * QC SUMMARY — coorte
-    */
-    def ch_qc_summary_done = ch_resistance_summary_done \
-        | QC_SUMMARY
-
-
-    /*
-    * ========================================================
-    * BLOCK 7 — FINAL BARRIER
-    * Tudo downstream espera QC_SUMMARY
-    * ========================================================
-    */
     def ch_block7_done = ch_qc_summary_done
         .map { true }
-
-
-    /*
-    * ========================================================
-    * BLOCK 8 — CLINICAL REPORT
-    * ========================================================
-    */
 
     def ch_clinical_report = ch_biosamples
         .combine(ch_block7_done)
         .map { biosample, _ -> biosample }
         | CLINICAL_REPORT
 
-
-    /*
-    * ========================================================
-    * BLOCK 8 — FINAL BARRIER
-    * Pipeline só termina após todos os laudos
-    * ========================================================
-    */
-
     def ch_block8_done = ch_clinical_report
         .collect()
         .map { true }
-
 
 }
 
