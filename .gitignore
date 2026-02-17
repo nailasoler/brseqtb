@@ -5,13 +5,13 @@ work/
 .nextflow/
 .nextflow.log*
 .init.done
+nxf-tmp*
 
 ############################################################
 # Micromamba runtime (NÃO versionar)
 ############################################################
 .micromamba/
 .mamba/
-bin/micromamba
 
 ############################################################
 # Logs (keep directory, ignore contents)
@@ -34,8 +34,33 @@ input/*
 # Analysis outputs
 results/
 
+# Generated manifest file
+manifest.tsv
+
 ############################################################
-# Databases (runtime / large / regenerable)
+# Tool runtime directories (generated during pipeline run)
+############################################################
+bwa/
+cohort/
+delly/
+fastqc/
+gatk/
+iqtree/
+kaiju/
+lineage/
+lofreq/
+mixInfection/
+norm/
+ntmFilter/
+resistance/
+snpMatrix/
+snpeff/
+tbdrRCov/
+transmission/
+trimmomatic/
+
+############################################################
+# Databases
 ############################################################
 
 # Kaiju database (keep structure, ignore contents)
@@ -44,6 +69,15 @@ database/kaiju/*
 !database/kaiju/db/
 database/kaiju/db/*
 !database/kaiju/db/.gitkeep
+
+# MTB reference: ignore everything first
+database/mtbRef/*
+
+# Keep only required reference source files
+!database/mtbRef/NC0009623.fasta
+!database/mtbRef/sequences.fa
+!database/mtbRef/genes.gff
+!database/mtbRef/forbidden_genes.txt
 
 ############################################################
 # OS / editor junk
@@ -69,22 +103,20 @@ __pycache__/
 *.mamba
 
 ############################################################
-# Keep versioned reference & assets
+# Keep OMS catalog
 ############################################################
-!database/omsCatalog/
-!database/omsCatalog/**
-!database/mtbRef/
-!database/mtbRef/**
+# OMS catalog: ignore everything first
+database/omsCatalog/*
+
+# Keep only original WHO catalog file
+!database/omsCatalog/WHO-UCN-TB-2023.7-eng.xlsx
 
 ############################################################
-# Assets (keep structure, ignore runtime tools content)
+# Assets (keep demo + templates only)
 ############################################################
 assets/*
 !assets/demo/
 !assets/templates/
-!assets/tools/
-assets/tools/*
-!assets/tools/.gitkeep
 
 ############################################################
 # Keep scripts and env definitions
@@ -93,3 +125,6 @@ assets/tools/*
 !bin/**
 !envs/
 !envs/**
+
+# Never version micromamba binary
+/bin/micromamba
