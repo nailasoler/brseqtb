@@ -1,137 +1,1036 @@
 nextflow.enable.dsl = 2
 
 /*
+ * ============================================================
  * Parameters
+ * ============================================================
  */
-params.run = null
-params.add_kaiju_manually = false
-params.setup_micromamba = true   // default: instala/atualiza env antes do resto
 
 /*
- * Processes
+ * ----------------------------
+ * EXECUTION CONTROL
+ * ----------------------------
+ */
+params.run                = null      // lista de módulos a executar (ex: bwa,lofreq)
+params.add_kaiju_manually = false     // kaiju DB já existe localmente
+params.cohort_demo        = false     // modo demo para cohort
+
+
+/*
+ * ============================================================
+ * BLOCK 2 — PREPROCESS (fan-out per biosample)
+ * ============================================================
+ */
+params.fastqc_cpus        = 1
+params.trimmomatic_cpus   = 1
+params.bwa_cpus           = 1
+params.kaiju_cpus         = 1
+
+
+/*
+ * ============================================================
+ * BLOCK 3 — VARIANT CALLING (fan-out per biosample)
+ * ============================================================
+ */
+params.lofreq_cpus        = 1
+params.gatk_gvcf_cpus     = 1
+params.gatk_vcf_cpus      = 1
+params.norm_cpus          = 1
+params.delly_cpus         = 1
+
+
+/*
+ * ============================================================
+ * BLOCK 4 — ANNOTATION + COHORT
+ * ============================================================
+ */
+params.snpeff_cpus        = 1
+params.tbdrRcov_cpus      = 1
+params.ntmfilter_cpus     = 1
+
+params.cohort_cpus        = 1          // roda uma vez (fan-in)
+params.cohort_filter_cpus = 1          // roda uma vez
+
+
+/*
+ * ============================================================
+ * BLOCK 5 — PHYLOGENY / TRANSMISSION
+ * ============================================================
+ */
+params.lineage_cpus       = 1
+params.snp_matrix_cpus    = 1          // fan-in
+params.mixinfection_cpus = 1
+params.transmission_cpus = 1           // fan-in
+params.iqtree_cpus        = 1           // fan-in pesado
+
+
+/*
+ * ============================================================
+ * BLOCK 6 — RESISTANCE (fan-out per biosample)
+ * ============================================================
+ */
+params.resistance_target_cpus = 1
+params.resistance_report_cpus = 1
+
+
+/*
+ * ============================================================
+ * BLOCK 7 — FINAL REPORTS
+ * ============================================================
+ */
+params.resistance_summary_cpus = 1      // fan-in
+params.qc_summary_cpus         = 1      // fan-in
+params.clinical_report_cpus   = 1       // fan-out
+
+
+/*
+ * ============================================================
+ * BLOCK 1 - INIT CHAIN — ALWAYS RUN ONCE (CACHED)
+ * ============================================================
  */
 
 process MICROMAMBA_SETUP {
-
     tag "micromamba-setup"
-
-    output:
-        path "micromamba_ready.txt"
-
+    input: val token
+    output: val true
     script:
     """
-    WORKDIR="\$PWD"
-    cd ${projectDir}
+    cd "${projectDir}"
     bash bin/micromamba_setup.sh
-    echo OK > "\$WORKDIR/micromamba_ready.txt"
     """
 }
 
 process KAIJU_DB {
-
     tag "kaiju-db"
-
-    input:
-        path micromamba_ready
-
+    input: val token
+    output: val true
     script:
     """
-    cd ${projectDir}
+    cd "${projectDir}"
     bash bin/kaijudb.sh ${params.add_kaiju_manually}
     """
 }
 
 process OMS_CATALOG {
-
     tag "oms-catalog"
-
-    input:
-        path micromamba_ready
-
+    input: val token
+    output: val true
     script:
     """
-    cd ${projectDir}
+    cd "${projectDir}"
     "${projectDir}/.micromamba/envs/brseqtb/bin/python" bin/omsCatalog.py
     """
 }
 
-
 process BWA_REF {
-
     tag "bwa-ref"
-
-    input:
-        path micromamba_ready
-
+    input: val token
+    output: val true
     script:
     """
-    cd ${projectDir}
+    cd "${projectDir}"
     bash bin/bwaref.sh
     """
 }
 
 process GATK_DICT {
-
     tag "gatk-dict"
-
-    input:
-        path micromamba_ready
-
+    input: val token
+    output: val true
     script:
     """
-    cd ${projectDir}
+    cd "${projectDir}"
     bash bin/gatkdict.sh
     """
 }
 
+process SNPEFF_DB {
+    tag "snpeff-db"
+    input: val token
+    output: val true
+    script:
+    """
+    cd "${projectDir}"
+    bash bin/snpeffdb.sh
+    """
+}
+
+
+process MAKE_MANIFEST_VALIDATE {
+
+    input:
+        val token
+        path input_table
+        path reads_dir
+
+    output:
+        path "manifest.tsv"
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/make_manifest_validate.py \
+        --xlsx ${input_table} \
+        --reads ${reads_dir} \
+        --out manifest.tsv
+
+    # COPIA PARA PROJECTDIR (igual aos outros scripts)
+    cp manifest.tsv ${projectDir}/manifest.tsv
+    """
+}
+
+
+
 /*
- * Workflow logic
+ * ============================================================
+ * BLOCK 2 - CACHED
+ * ============================================================
  */
+
+process FASTQC {
+    tag { biosample }
+    cpus { params.fastqc_cpus }
+
+    input:
+        tuple val(biosample), val(token)
+
+    output:
+        tuple val(biosample), path("fastqc/${biosample}")
+
+    script:
+    """
+    bash ${projectDir}/bin/fastqc.sh "${biosample}"
+    mkdir -p fastqc
+    cp -r ${projectDir}/fastqc/${biosample} fastqc/
+    """
+}
+
+process TRIMMOMATIC {
+    tag { biosample }
+    cpus { params.trimmomatic_cpus }
+
+    input:
+        tuple val(biosample), val(token)
+
+    output:
+        tuple val(biosample), path("trimmomatic/${biosample}")
+
+    script:
+    """
+    bash ${projectDir}/bin/trimmomatic.sh "${biosample}"
+    mkdir -p trimmomatic
+    cp -r ${projectDir}/trimmomatic/${biosample} trimmomatic/
+    """
+}
+
+process BWA {
+    tag { biosample }
+    cpus { params.bwa_cpus }
+
+    input:
+        tuple val(biosample), path(trim_dir)
+
+    output:
+        tuple val(biosample), path("bwa/${biosample}")
+        path "bwa/${biosample}/${biosample}_bwa_summary.csv"
+
+    script:
+    """
+    export THREADS=${task.cpus}
+    bash ${projectDir}/bin/bwa.sh "${biosample}"
+    mkdir -p bwa
+    cp -r ${projectDir}/bwa/${biosample} bwa/
+    """
+}
+
+process KAIJU {
+    tag { biosample }
+    cpus { params.kaiju_cpus }
+
+    input:
+        tuple val(biosample), path(trim_dir)
+
+    output:
+        path "kaiju/${biosample}"
+        path "kaiju/${biosample}/${biosample}_kaiju_summary.csv"
+
+    script:
+    """
+    export THREADS=${task.cpus}
+    bash ${projectDir}/bin/kaiju.sh "${biosample}"
+    mkdir -p kaiju
+    cp -r ${projectDir}/kaiju/${biosample} kaiju/
+    """
+}
+
+/*
+ * ============================================================
+ * Block 3
+ * ============================================================
+ */
+
+process DELLY {
+    tag { biosample }
+    cpus { params.delly_cpus }
+
+    input:
+        tuple val(biosample), path(bwa_dir)
+        path bwa_summary
+
+    output:
+        path "delly/${biosample}"
+        path "delly/${biosample}/${biosample}_delly.vcf.gz"
+
+    script:
+    """
+    export THREADS=${task.cpus}
+    bash ${projectDir}/bin/delly.sh "${biosample}"
+    mkdir -p delly
+    cp -r ${projectDir}/delly/${biosample} delly/
+    """
+}
+
+process LOFREQ {
+    tag { biosample }
+    cpus { params.lofreq_cpus }
+
+    input:
+        tuple val(biosample), path(bwa_dir)
+        path bwa_summary
+
+    output:
+        path "lofreq/${biosample}"
+        path "lofreq/${biosample}/${biosample}_lofreq.vcf.gz"
+
+    script:
+    """
+    bash ${projectDir}/bin/lofreq.sh "${biosample}"
+    mkdir -p lofreq
+    cp -r ${projectDir}/lofreq/${biosample} lofreq/
+    """
+}
+
+process GATK_GVCF {
+    tag { biosample }
+    cpus { params.gatk_gvcf_cpus }
+
+    input:
+        tuple val(biosample), path(bwa_dir)
+        path bwa_summary
+
+    output:
+        path "gatk/${biosample}"
+        path "gatk/${biosample}/${biosample}.g.vcf.gz"
+
+    script:
+    """
+    export THREADS=${task.cpus}
+    bash ${projectDir}/bin/gatkGvcf.sh "${biosample}"
+    mkdir -p gatk
+    cp -r ${projectDir}/gatk/${biosample} gatk/
+    """
+}
+
+process GATK_VCF {
+    tag { biosample }
+    cpus { params.gatk_vcf_cpus }
+
+    input:
+        tuple val(biosample), path(bwa_dir)
+        path bwa_summary
+
+    output:
+        path "gatk/${biosample}"
+        path "gatk/${biosample}/${biosample}_gatk.vcf.gz"
+
+    script:
+    """
+    export THREADS=${task.cpus}
+    bash ${projectDir}/bin/gatkVcf.sh "${biosample}"
+    mkdir -p gatk
+    cp -r ${projectDir}/gatk/${biosample} gatk/
+    """
+}
+
+process NORM {
+    tag { gatk_dir.baseName }
+
+    input:
+        path gatk_dir
+        path vcf_file
+
+    output:
+        path "norm/${gatk_dir.baseName}"
+
+    script:
+    """
+    BIOSAMPLE=\$(basename "${gatk_dir}")
+    bash ${projectDir}/bin/norm.sh "\${BIOSAMPLE}"
+    mkdir -p norm
+    cp -r ${projectDir}/norm/\${BIOSAMPLE} norm/
+    """
+}
+
+/*
+ * ============================================================
+ * Block 4
+ * ============================================================
+ */
+ 
+process SNPEFF {
+    tag { biosample }
+    cpus { params.snpeff_cpus }
+
+    input:
+        tuple val(biosample), path(bwa_dir)
+        path bwa_summary
+
+    output:
+        path "snpeff/${biosample}"
+
+    script:
+    """
+    bash ${projectDir}/bin/snpeff.sh "${biosample}"
+    mkdir -p snpeff
+    cp -r ${projectDir}/snpeff/${biosample} snpeff/
+    """
+}
+
+process TBDR_RCOV {
+    tag { biosample }
+    cpus { params.tbdr_rcov_cpus ?: 1 }
+
+    input:
+        val biosample
+
+    output:
+        path "tbdrRCov/${biosample}"
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/tbdrRCov.py "${biosample}"
+
+    mkdir -p tbdrRCov
+    cp -r ${projectDir}/tbdrRCov/${biosample} tbdrRCov/
+    """
+}
+
+
+process NTM_FILTER {
+    tag { biosample }
+    cpus { params.ntm_filter_cpus ?: 1 }
+
+    input:
+        val biosample
+
+    output:
+        path "ntmFilter/${biosample}"
+
+    script:
+    """
+    bash ${projectDir}/bin/ntmFilter.sh "${biosample}"
+
+    mkdir -p ntmFilter
+    cp -r ${projectDir}/ntmFilter/${biosample} ntmFilter/
+    """
+}
+
+
+process LINEAGE {
+    tag { biosample }
+
+    input:
+        val biosample
+
+    output:
+        path "lineage/${biosample}"
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/lineage.py "${biosample}"
+
+    mkdir -p lineage
+    cp -r ${projectDir}/lineage/${biosample} lineage/
+    """
+}
+
+
+process COHORT {
+    tag "cohort"
+
+    input:
+        val trigger
+
+    output:
+        path "cohort"
+
+    script:
+    """
+    DEMO_FLAG=""
+    if ${params.cohort_demo}; then DEMO_FLAG="--demo"; fi
+
+    bash ${projectDir}/bin/cohort.sh ${projectDir}/manifest.tsv \$DEMO_FLAG
+
+    mkdir -p cohort
+    cp -r ${projectDir}/cohort/* cohort/ || true
+    """
+}
+
+
+process COHORT_FILTER {
+    tag "cohort-filter"
+
+    input:
+        path cohort_dir
+
+    output:
+        path "cohort_filtered"
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/cohortFilter.py
+
+    mkdir -p cohort_filtered
+    cp -r ${projectDir}/cohort_filtered/* cohort_filtered/ || true
+    """
+}
+
+/*
+ * ============================================================
+ * Block 5 — PHYLOGENY / TRANSMISSION
+ * ============================================================
+ */
+
+/*
+ * SNP_MATRIX
+ * - Roda UMA vez (coorte)
+ * - Gera snpMatrix + mixInfection base
+ */
+process SNP_MATRIX {
+    tag "snp-matrix"
+
+    input:
+        val trigger
+
+    output:
+        val true
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/snpMatrix.py
+    """
+}
+
+/*
+ * TRANSMISSION
+ * - Roda UMA vez (coorte)
+ * - OBRIGATORIAMENTE após SNP_MATRIX
+ */
+process TRANSMISSION {
+    tag "transmission"
+
+    input:
+        val trigger
+
+    output:
+        path "transmission"
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/transmission.py
+
+    mkdir -p transmission
+    cp -r ${projectDir}/transmission/* transmission/ || true
+    """
+}
+
+
+
+/*
+ * IQTREE
+ * - Roda UMA vez (coorte)
+ * - OBRIGATORIAMENTE após SNP_MATRIX
+ */
+process IQTREE {
+    tag "iqtree"
+    cpus { params.iqtree_cpus }
+
+    input:
+        val trigger
+
+    output:
+        path "iqtree"
+
+    script:
+    """
+    export THREADS=${task.cpus}
+    bash ${projectDir}/bin/iqtree.sh
+
+    mkdir -p iqtree
+    cp -r ${projectDir}/iqtree/* iqtree/ || true
+    """
+}
+
+/*
+ * ============================================================
+ * Block 6 — Reports
+ * ============================================================
+ */
+
+process MIXINFECTION {
+    tag { biosample }
+
+    input:
+        val biosample
+
+    output:
+        path "mixInfection/${biosample}"
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/mixInfection.py ${biosample}
+
+    mkdir -p mixInfection/${biosample}
+    cp -r ${projectDir}/mixInfection/${biosample}/* mixInfection/${biosample}/ || true
+    """
+}
+
+process RESISTANCE_TARGET {
+    tag { biosample }
+    cpus { params.resistance_target_cpus }
+
+    input:
+        val biosample
+
+    output:
+        path "${biosample}_OMStarget.xlsx"
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/resistanceTarget.py "${biosample}"
+
+    cp ${projectDir}/resistance/${biosample}/${biosample}_OMStarget.xlsx .
+    """
+}
+
+
+
+process RESISTANCE_REPORT {
+    tag { omstarget.baseName }
+    cpus { params.resistance_report_cpus }
+
+    input:
+        path omstarget
+
+    output:
+        path "${omstarget.baseName}.xlsx"
+
+    script:
+    """
+    BIOSAMPLE=\$(basename "${omstarget}" _OMStarget.xlsx)
+
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/resistanceReport.py "\$BIOSAMPLE"
+
+    cp ${projectDir}/results/resistance/\$BIOSAMPLE.xlsx .
+    """
+}
+
+/*
+ * ============================================================
+ * Block 7 — Summary
+ * ============================================================
+ */
+
+process RESISTANCE_SUMMARY {
+
+    tag "resistance-summary"
+
+    input:
+    val token
+
+    output:
+    val true
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/resistanceSummary.py
+    """
+}
+
+process QC_SUMMARY {
+
+    tag "qc-summary"
+
+    input:
+    val token
+
+    output:
+    val true
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/qcSummary.py
+    """
+}
+
+
+/*
+ * ============================================================
+ * Block 8 — Clinical Report
+ * ============================================================
+ */
+
+process CLINICAL_REPORT {
+
+    tag { biosample }
+
+    input:
+    val biosample
+
+    output:
+    path "clinicalReport/${biosample}.docx"
+
+    script:
+    """
+    ${projectDir}/.micromamba/envs/brseqtb/bin/python \
+        ${projectDir}/bin/clinicalReport.py ${biosample}
+
+    mkdir -p clinicalReport
+    cp ${projectDir}/results/clinicalReport/${biosample}.docx clinicalReport/
+    """
+}
+
+
+/*
+ * ============================================================
+ * WORKFLOW
+ * ============================================================
+ */
+
 workflow {
 
-    // Default full chain
-    def full = ['micromamba', 'kaiju', 'oms', 'bwaref', 'gatkdict']
+    /*
+    * ========================================================
+    * BLOCK 1 — INIT CHAIN
+    * ========================================================
+    */
 
-    // Parse user selection
-    def steps = params.run
-        ? params.run.split(',')*.trim()
-        : full
+    def ch_init = Channel.value(true)
 
-    // Validate requested modules
-    def valid = ['micromamba', 'kaiju', 'oms', 'bwaref', 'gatkdict']
-    def invalid = steps.findAll { !valid.contains(it) }
+    ch_init = MICROMAMBA_SETUP(ch_init)
+    ch_init = KAIJU_DB(ch_init)
+    ch_init = OMS_CATALOG(ch_init)
+    ch_init = BWA_REF(ch_init)
+    ch_init = GATK_DICT(ch_init)
+    ch_init = SNPEFF_DB(ch_init)
 
-    if ( invalid ) {
-        error "Invalid module(s) in --run: ${invalid.join(', ')}"
-    }
+    def ch_input_table = Channel.fromPath("${projectDir}/input/input_table.xlsx")
+    def ch_reads_dir   = Channel.fromPath("${projectDir}/reads")
 
-    // Always run micromamba setup first (unless disabled)
-    def micromamba_ready_ch = null
-    if ( params.setup_micromamba ) {
-        micromamba_ready_ch = MICROMAMBA_SETUP()
-    } else {
-        micromamba_ready_ch = Channel.fromPath("${projectDir}/micromamba_ready.txt", checkIfExists: false)
-    }
+    def ch_manifest = MAKE_MANIFEST_VALIDATE(
+        ch_init,
+        ch_input_table,
+        ch_reads_dir
+    )
 
-    // Execute requested modules in order
-    steps.each { step ->
-        switch ( step ) {
-            case 'micromamba':
-                // already handled above; keep for user visibility
-                break
-            case 'kaiju':
-                KAIJU_DB(micromamba_ready_ch)
-                break
-            case 'oms':
-                OMS_CATALOG(micromamba_ready_ch)
-                break
-            case 'bwaref':
-                BWA_REF(micromamba_ready_ch)
-                break
-            case 'gatkdict':
-                GATK_DICT(micromamba_ready_ch)
-                break
-        }
-    }
+
+    /*
+    * ========================================================
+    * BLOCK 2 — PREPROCESS (fan-out per biosample)
+    * ========================================================
+    */
+
+    // extract biosample IDs from manifest
+    def ch_biosamples = ch_manifest
+        .splitCsv(header: true, sep: '\t')
+        .map { row -> row.biosample }
+
+    // FASTQC
+    ch_biosamples
+        .combine(ch_init)
+        | FASTQC
+
+    // TRIMMOMATIC (anchor of block 2)
+    def ch_trim = ch_biosamples
+        .combine(ch_init)
+        | TRIMMOMATIC
+
+    // BWA and KAIJU depend on TRIMMOMATIC
+    def ch_bwa   = ch_trim | BWA
+    def ch_kaiju = ch_trim | KAIJU
+
+    /*
+    * ========================================================
+    * BLOCK 2 — GLOBAL BARRIER
+    * ========================================================
+    */
+
+    def ch_block2_done = ch_trim
+        .collect()
+        .map { true }
+
+    /*
+    * ========================================================
+    * BLOCK 3 — VARIANT CALLERS (fan-out per biosample)
+    * ========================================================
+    */
+
+    /*
+    * DELLY — per biosample
+    */
+    def ch_delly = ch_bwa | DELLY
+
+    /*
+    * LOFREQ — per biosample
+    */
+    def ch_lofreq = ch_bwa | LOFREQ
+
+    /*
+    * GATK GVCF — per biosample
+    */
+    def ch_gatk_gvcf = ch_bwa | GATK_GVCF
+
+    /*
+    * GATK VCF — per biosample
+    * (independente do GVCF, conforme sua definição)
+    */
+    def ch_gatk_vcf = ch_bwa | GATK_VCF
+
+    /*
+    * NORM — OBRIGATORIAMENTE após GATK_VCF
+    */
+    def ch_norm = ch_gatk_vcf | NORM
+
+
+    /*
+    * ========================================================
+    * BLOCK 3 — GLOBAL BARRIER
+    * Ensures ALL variant callers are finished
+    * ========================================================
+    */
+
+    def ch_block3_done = ch_norm
+        .collect()
+        .map { true }
+
+
+    /*
+    * ========================================================
+    * BLOCK 4 — ANNOTATION / FILTERING / COHORT
+    * ========================================================
+    */
+
+    /*
+    * SNPEFF — per biosample
+    * (usa BWA como âncora)
+    */
+    def ch_snpeff = ch_bwa | SNPEFF
+
+    /*
+    * TBDR_RCOV — per biosample
+    */
+    def ch_tbdr_rcov = ch_biosamples | TBDR_RCOV
+
+    /*
+    * NTM_FILTER — per biosample
+    */
+    def ch_ntm_filter = ch_biosamples | NTM_FILTER
+
+    /*
+    * LINEAGE — per biosample
+    */
+    def ch_lineage = ch_biosamples | LINEAGE
+
+
+    /*
+    * ========================================================
+    * BLOCK 4 — GLOBAL BARRIER (per-biosample steps)
+    * Ensures ALL per-sample annotations are finished
+    *
+    * NOTE:
+    * We do NOT merge ChannelOut objects.
+    * The barrier is anchored on ch_biosamples,
+    * which is fully consumed by all per-sample processes.
+    * ========================================================
+    */
+
+    def ch_block4_samples_done = ch_biosamples
+        .collect()
+        .map { true }
+
+
+    /*
+    * ========================================================
+    * COHORT — runs once for the entire manifest
+    * ========================================================
+    */
+
+    def ch_cohort = ch_block4_samples_done | COHORT
+
+
+    /*
+    * ========================================================
+    * COHORT FILTER — must run AFTER COHORT
+    * ========================================================
+    */
+
+    def ch_cohort_filtered = ch_cohort | COHORT_FILTER
+
+
+    /*
+    * ========================================================
+    * BLOCK 4 — FINAL BARRIER
+    * Everything downstream must wait for this
+    * ========================================================
+    */
+
+    def ch_block4_done = ch_cohort_filtered
+        .collect()
+        .map { true }
+
+    /*
+    * ========================================================
+    * BLOCK 5 — PHYLOGENY / TRANSMISSION
+    * ========================================================
+    */
+
+    /*
+    * SNP_MATRIX — coorte
+    * Roda UMA vez
+    */
+    def ch_snp_matrix_done = ch_block4_done \
+        | SNP_MATRIX
+
+
+    /*
+    * TRANSMISSION — coorte
+    * OBRIGATORIAMENTE após SNP_MATRIX
+    */
+    def ch_transmission = ch_snp_matrix_done \
+        | TRANSMISSION
+
+
+    /*
+    * IQTREE — coorte
+    * OBRIGATORIAMENTE após SNP_MATRIX
+    */
+    def ch_iqtree = ch_snp_matrix_done \
+        | IQTREE
+
+
+    /*
+    * ========================================================
+    * BLOCK 5 — FINAL BARRIER
+    * Tudo downstream espera aqui
+    * ========================================================
+    */
+    def ch_block5_done = ch_snp_matrix_done
+        .collect()
+        .map { true }
+
+    /*
+    * ========================================================
+    * BLOCK 6 — MIXED INFECTION / RESISTANCE PROFILING
+    * ========================================================
+    */
+
+    /*
+    * MIXINFECTION — per biosample
+    */
+    def ch_mixinfection = ch_biosamples
+        .combine(ch_block5_done)
+        .map { biosample, _ -> biosample }
+        | MIXINFECTION
+
+
+    /*
+    * RESISTANCE TARGET — per biosample
+    * PRODUZ _OMStarget.xlsx
+    */
+    def ch_resistance_target = ch_biosamples
+        .combine(ch_block5_done)
+        .map { biosample, _ -> biosample }
+        | RESISTANCE_TARGET
+
+
+    /*
+    * RESISTANCE REPORT — per biosample
+    * DEPENDÊNCIA REAL NO ARQUIVO
+    */
+    def ch_resistance_report = ch_resistance_target \
+        | RESISTANCE_REPORT
+
+
+    /*
+    * FINAL BARRIER
+    */
+    def ch_block6_done = ch_resistance_report
+        .collect()
+        .map { true }
+
+    /*
+    * ========================================================
+    * BLOCK 7 — SUMMARY (coorte)
+    * ========================================================
+    */
+
+    /*
+    * RESISTANCE SUMMARY — coorte
+    */
+    def ch_resistance_summary_done = ch_block6_done \
+        | RESISTANCE_SUMMARY
+
+
+    /*
+    * QC SUMMARY — coorte
+    */
+    def ch_qc_summary_done = ch_resistance_summary_done \
+        | QC_SUMMARY
+
+
+    /*
+    * ========================================================
+    * BLOCK 7 — FINAL BARRIER
+    * Tudo downstream espera QC_SUMMARY
+    * ========================================================
+    */
+    def ch_block7_done = ch_qc_summary_done
+        .map { true }
+
+
+    /*
+    * ========================================================
+    * BLOCK 8 — CLINICAL REPORT
+    * ========================================================
+    */
+
+    def ch_clinical_report = ch_biosamples
+        .combine(ch_block7_done)
+        .map { biosample, _ -> biosample }
+        | CLINICAL_REPORT
+
+
+    /*
+    * ========================================================
+    * BLOCK 8 — FINAL BARRIER
+    * Pipeline só termina após todos os laudos
+    * ========================================================
+    */
+
+    def ch_block8_done = ch_clinical_report
+        .collect()
+        .map { true }
+
+
 }
 
