@@ -12,6 +12,10 @@
 #
 # Compatible with Nextflow Conda/Mamba environment
 # (uses snpEff from PATH)
+#
+# IMPORTANT:
+#   - Does NOT modify Conda environment
+#   - Stores custom DB inside project directory
 # ============================================================
 
 set -euo pipefail
@@ -27,8 +31,15 @@ if ! command -v snpEff >/dev/null 2>&1; then
     exit 1
 fi
 
-SNPEFF_CONFIG="${CONDA_PREFIX}/share/snpeff/snpEff.config"
-SNPEFF_DATA_DIR="${CONDA_PREFIX}/share/snpeff/data/${GENOME_DB}"
+SNPEFF_BIN="$(which snpEff)"
+
+# -------------------- Custom SnpEff project location --------------------
+# We NEVER write inside Conda environment.
+# Custom database is stored inside project.
+SNPEFF_PROJECT_DIR="${PROJECT_DIR}/database/snpeff"
+SNPEFF_CONFIG="${SNPEFF_PROJECT_DIR}/snpEff.config"
+SNPEFF_DATA_ROOT="${SNPEFF_PROJECT_DIR}/data"
+SNPEFF_DATA_DIR="${SNPEFF_DATA_ROOT}/${GENOME_DB}"
 
 # -------------------- Reference inputs --------------------
 REF_DIR="${PROJECT_DIR}/database/mtbRef"
@@ -36,14 +47,31 @@ GFF="${REF_DIR}/genes.gff"
 FASTA="${REF_DIR}/sequences.fa"
 
 # -------------------- Checks --------------------
-[[ -f "$SNPEFF_CONFIG" ]] || { echo "[ERROR] snpEff.config not found: $SNPEFF_CONFIG"; exit 1; }
-[[ -f "$GFF" ]]           || { echo "[ERROR] genes.gff not found: $GFF"; exit 1; }
-[[ -f "$FASTA" ]]         || { echo "[ERROR] sequences.fa not found: $FASTA"; exit 1; }
+[[ -f "$GFF" ]]   || { echo "[ERROR] genes.gff not found: $GFF"; exit 1; }
+[[ -f "$FASTA" ]] || { echo "[ERROR] sequences.fa not found: $FASTA"; exit 1; }
 
 echo "[INFO] snpEff binary : $SNPEFF_BIN"
-echo "[INFO] Config file   : $SNPEFF_CONFIG"
+echo "[INFO] Project DB dir: $SNPEFF_PROJECT_DIR"
 echo "[INFO] Data directory: $SNPEFF_DATA_DIR"
 echo "---------------------------------------------"
+
+# -------------------- Prepare project directories --------------------
+mkdir -p "$SNPEFF_DATA_DIR"
+
+# -------------------- Initialize config if missing --------------------
+# Copy default config from Conda package only once
+if [[ ! -f "$SNPEFF_CONFIG" ]]; then
+    echo "[INFO] Creating local snpEff.config"
+
+    DEFAULT_CONFIG=$(find "$(dirname "$SNPEFF_BIN")/.." -name snpEff.config 2>/dev/null | head -n 1)
+
+    if [[ -z "$DEFAULT_CONFIG" ]]; then
+        echo "[ERROR] Could not locate default snpEff.config inside Conda environment"
+        exit 1
+    fi
+
+    cp "$DEFAULT_CONFIG" "$SNPEFF_CONFIG"
+fi
 
 # -------------------- SKIP IF ALREADY BUILT --------------------
 BIN_FILE="${SNPEFF_DATA_DIR}/snpEffectPredictor.bin"
@@ -57,15 +85,13 @@ fi
 echo "[RUN] Building SnpEff database: ${GENOME_DB}"
 echo "---------------------------------------------"
 
-# -------------------- Prepare data directory --------------------
-mkdir -p "$SNPEFF_DATA_DIR"
-
+# -------------------- Copy reference files --------------------
 cp -f "$GFF"   "${SNPEFF_DATA_DIR}/genes.gff"
 cp -f "$FASTA" "${SNPEFF_DATA_DIR}/sequences.fa"
 
 echo "[INFO] Copied genes.gff and sequences.fa"
 
-# -------------------- Register genome --------------------
+# -------------------- Register genome in LOCAL config --------------------
 if ! grep -q "^${GENOME_DB}\.genome" "$SNPEFF_CONFIG"; then
     echo "[INFO] Registering genome in snpEff.config"
     echo "${GENOME_DB}.genome : Mycobacterium_tuberculosis_H37Rv" >> "$SNPEFF_CONFIG"
@@ -79,6 +105,7 @@ echo "---------------------------------------------"
 
 snpEff build \
     -c "$SNPEFF_CONFIG" \
+    -dataDir "$SNPEFF_DATA_ROOT" \
     -gff3 \
     -noCheckCds \
     -noCheckProtein \
