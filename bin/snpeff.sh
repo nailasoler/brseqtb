@@ -5,7 +5,7 @@
 #
 # Uses:
 #   - Custom DB: NC_0009623
-#   - snpEff.config from micromamba environment
+#   - snpEff from Conda/Mamba environment (Nextflow)
 # ============================================================
 
 set -euo pipefail
@@ -19,29 +19,26 @@ fi
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# -------------------- Locate SnpEff --------------------
-SNPEFF_JAR=$(ls "${PROJECT_DIR}/.micromamba/envs/brseqtb/share"/snpeff-*/snpEff.jar 2>/dev/null | head -n 1)
-SNPEFF_BASE_DIR="$(dirname "$SNPEFF_JAR")"
-SNPEFF_CONFIG="${SNPEFF_BASE_DIR}/snpEff.config"
-
 GENOME_DB="NC_0009623"
-
-# Callers obrigatórios (1 VCF por caller)
 CALLERS=("gatk" "lofreq" "norm" "delly")
 
+# -------------------- Locate SnpEff (from PATH) --------------------
+if ! command -v snpEff >/dev/null 2>&1; then
+    echo "[ERROR] snpEff not found in PATH (Conda environment not active?)"
+    exit 1
+fi
+
+SNPEFF_BIN="$(which snpEff)"
+SNPEFF_BASE_DIR="$(dirname "$SNPEFF_BIN")/../share/snpeff"
+SNPEFF_CONFIG="${SNPEFF_BASE_DIR}/snpEff.config"
+
 # -------------------- DEPENDENCY CHECKS --------------------
-for cmd in java bgzip tabix; do
+for cmd in bgzip tabix; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "[ERROR] Required command not found: $cmd"
         exit 1
     fi
 done
-
-[[ -f "$SNPEFF_JAR" ]] || {
-    echo "[ERROR] snpEff.jar not found in micromamba env:"
-    echo "        ${PROJECT_DIR}/.micromamba/envs/brseqtb/share/snpeff-*/snpEff.jar"
-    exit 1
-}
 
 [[ -f "$SNPEFF_CONFIG" ]] || {
     echo "[ERROR] snpEff.config not found:"
@@ -51,6 +48,11 @@ done
 
 OUTPUT_DIR="${PROJECT_DIR}/snpeff/${BIOSAMPLE}"
 mkdir -p "$OUTPUT_DIR"
+
+echo "[INFO] snpEff binary : $SNPEFF_BIN"
+echo "[INFO] Config file   : $SNPEFF_CONFIG"
+echo "[INFO] Database      : ${GENOME_DB}"
+echo "---------------------------------------------"
 
 # ============================================================
 # STRICT INPUT CHECK — all 4 callers MUST exist
@@ -74,7 +76,6 @@ for CALLER in "${CALLERS[@]}"; do
         exit 1
     }
 
-    # Assume 1 VCF por caller (pipeline controlado)
     CALLER_VCF["$CALLER"]="${VCF_FILES[0]}"
 done
 
@@ -100,9 +101,6 @@ if [[ "$ALL_DONE" == true ]]; then
 fi
 
 echo "[RUN] Starting SnpEff annotation for biosample: ${BIOSAMPLE}"
-echo "[DB]     Using database : ${GENOME_DB}"
-echo "[JAR]    Using snpEff   : ${SNPEFF_JAR}"
-echo "[CONFIG] Using config   : ${SNPEFF_CONFIG}"
 echo "---------------------------------------------"
 
 # ============================================================
@@ -125,7 +123,7 @@ for CALLER in "${CALLERS[@]}"; do
     TMP_VCF=$(mktemp --suffix=".vcf")
     gunzip -c "$VCF_FILE" > "$TMP_VCF"
 
-    java -Xmx4g -jar "$SNPEFF_JAR" eff \
+    snpEff eff \
         -c "$SNPEFF_CONFIG" \
         -v \
         -ud 100 \
@@ -142,4 +140,3 @@ done
 
 echo "[DONE] SnpEff annotation completed for biosample: ${BIOSAMPLE}"
 echo "[OUT]  Results in: ${OUTPUT_DIR}/"
-

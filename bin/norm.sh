@@ -9,17 +9,13 @@
 # Notes:
 # - This script is designed to run on one biosample at a time
 # - Parallelization is handled externally by Nextflow
+# - Uses tools from Conda environment (activated by Nextflow)
 # ============================================================
 
 set -euo pipefail
 
-# ================= PROJECT DIR / ENV =================
+# ================= PROJECT DIR =================
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-MAMBA_ROOT="${PROJECT_DIR}/.micromamba"
-ENV_BIN="${MAMBA_ROOT}/envs/brseqtb/bin"
-
-export PATH="${ENV_BIN}:${PROJECT_DIR}/bin:${PATH}"
 
 # ================= INPUTS =================
 BIOSAMPLE="${1:-}"
@@ -58,7 +54,7 @@ fi
 # ================= DEPENDENCY CHECKS =================
 for cmd in bcftools vt bgzip; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo "[ERROR] Required command not found in brseqtb env: $cmd"
+        echo "[ERROR] Required command not found in Conda environment: $cmd"
         exit 1
     fi
 done
@@ -101,4 +97,3 @@ echo "[DONE] Normalization and decomposition completed for biosample: ${BIOSAMPL
 echo "[OUT] Final file: ${OUTPUT_VCF}.gz"
 echo "[OUT] Index: ${OUTPUT_VCF}.gz.csi"
 echo "[OUT] Folder: ${OUTPUT_DIR}/"
-

@@ -9,6 +9,9 @@
 #
 # Explicitly disables CDS / protein validation
 # Safe to run multiple times (SKIP if already built)
+#
+# Compatible with Nextflow Conda/Mamba environment
+# (uses snpEff from PATH)
 # ============================================================
 
 set -euo pipefail
@@ -18,9 +21,14 @@ GENOME_DB="NC_0009623"
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# -------------------- Locate SnpEff --------------------
-SNPEFF_JAR=$(ls "${PROJECT_DIR}/.micromamba/envs/brseqtb/share"/snpeff-*/snpEff.jar 2>/dev/null | head -n 1)
-SNPEFF_BASE_DIR="$(dirname "$SNPEFF_JAR")"
+# -------------------- Locate SnpEff (from Conda env) --------------------
+if ! command -v snpEff >/dev/null 2>&1; then
+    echo "[ERROR] snpEff not found in PATH (Conda environment not active?)"
+    exit 1
+fi
+
+SNPEFF_BIN="$(which snpEff)"
+SNPEFF_BASE_DIR="$(dirname "$SNPEFF_BIN")/../share/snpeff"
 SNPEFF_CONFIG="${SNPEFF_BASE_DIR}/snpEff.config"
 SNPEFF_DATA_DIR="${SNPEFF_BASE_DIR}/data/${GENOME_DB}"
 
@@ -30,10 +38,14 @@ GFF="${REF_DIR}/genes.gff"
 FASTA="${REF_DIR}/sequences.fa"
 
 # -------------------- Checks --------------------
-[[ -f "$SNPEFF_JAR" ]]     || { echo "[ERROR] snpEff.jar not found"; exit 1; }
-[[ -f "$SNPEFF_CONFIG" ]] || { echo "[ERROR] snpEff.config not found"; exit 1; }
+[[ -f "$SNPEFF_CONFIG" ]] || { echo "[ERROR] snpEff.config not found: $SNPEFF_CONFIG"; exit 1; }
 [[ -f "$GFF" ]]           || { echo "[ERROR] genes.gff not found: $GFF"; exit 1; }
 [[ -f "$FASTA" ]]         || { echo "[ERROR] sequences.fa not found: $FASTA"; exit 1; }
+
+echo "[INFO] snpEff binary : $SNPEFF_BIN"
+echo "[INFO] Config file   : $SNPEFF_CONFIG"
+echo "[INFO] Data directory: $SNPEFF_DATA_DIR"
+echo "---------------------------------------------"
 
 # -------------------- SKIP IF ALREADY BUILT --------------------
 BIN_FILE="${SNPEFF_DATA_DIR}/snpEffectPredictor.bin"
@@ -45,9 +57,6 @@ if [[ -f "$BIN_FILE" ]]; then
 fi
 
 echo "[RUN] Building SnpEff database: ${GENOME_DB}"
-echo "[INFO] SnpEff jar : ${SNPEFF_JAR}"
-echo "[INFO] Config     : ${SNPEFF_CONFIG}"
-echo "[INFO] Data dir   : ${SNPEFF_DATA_DIR}"
 echo "---------------------------------------------"
 
 # -------------------- Prepare data directory --------------------
@@ -55,6 +64,8 @@ mkdir -p "$SNPEFF_DATA_DIR"
 
 cp -f "$GFF"   "${SNPEFF_DATA_DIR}/genes.gff"
 cp -f "$FASTA" "${SNPEFF_DATA_DIR}/sequences.fa"
+
+echo "[INFO] Copied genes.gff and sequences.fa"
 
 # -------------------- Register genome --------------------
 if ! grep -q "^${GENOME_DB}\.genome" "$SNPEFF_CONFIG"; then
@@ -64,8 +75,11 @@ else
     echo "[INFO] Genome already registered in snpEff.config"
 fi
 
-# -------------------- Build database (EXPLICIT CONFIG) --------------------
-java -Xmx4g -jar "$SNPEFF_JAR" build \
+# -------------------- Build database --------------------
+echo "[RUN] Executing snpEff build..."
+echo "---------------------------------------------"
+
+snpEff build \
     -c "$SNPEFF_CONFIG" \
     -gff3 \
     -noCheckCds \
@@ -80,4 +94,3 @@ printf "[DONE] SnpEff DB built for %s (%02d min %02d sec)\n" \
     "$GENOME_DB" $((ELAPSED/60)) $((ELAPSED%60))
 
 echo "[OK]  ${BIN_FILE}"
-

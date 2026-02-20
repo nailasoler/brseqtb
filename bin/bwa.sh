@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 # Mapping paired-end reads using BWA-MEM and generating BAMs
+# Compatible with Nextflow Conda/Mamba environment
 # ============================================================
 
 set -euo pipefail
@@ -14,8 +15,6 @@ TRIM_DIR="${PROJECT_DIR}/trimmomatic/${BIOSAMPLE}"
 REF="${PROJECT_DIR}/database/mtbRef/NC0009623.fasta"
 OUTPUT_DIR="${PROJECT_DIR}/bwa/${BIOSAMPLE}"
 SUMMARY_CSV="${OUTPUT_DIR}/${BIOSAMPLE}_bwa_summary.csv"
-
-PICARD_JAR=$(ls "${PROJECT_DIR}/.micromamba/envs/brseqtb/share"/picard*/picard.jar 2>/dev/null | head -n 1)
 
 MIN_MAPPED=95
 MIN_COVERAGE=90
@@ -36,11 +35,6 @@ if [[ ! -f "$REF" ]]; then
     exit 1
 fi
 
-if [[ ! -f "$PICARD_JAR" ]]; then
-    echo "[ERROR] Picard JAR not found in micromamba environment"
-    exit 1
-fi
-
 mkdir -p "$OUTPUT_DIR"
 
 # ===================== SKIP IF ALREADY DONE =====================
@@ -51,12 +45,17 @@ if [[ -s "$SUMMARY_CSV" ]]; then
 fi
 
 # ===================== DEPENDENCY CHECKS =====================
-for cmd in bwa samtools bc java; do
+for cmd in bwa samtools bc java picard; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo "[ERROR] Required command not found: $cmd"
         exit 1
     fi
 done
+
+echo "[INFO] Using bwa: $(which bwa)"
+echo "[INFO] Using samtools: $(which samtools)"
+echo "[INFO] Using picard: $(which picard)"
+echo "---------------------------------------------"
 
 # ===================== HEADER OF CSV =====================
 echo "biosample,filename,total_reads,mapped_reads,mapped_pct,duplicates_pct,properly_paired_pct,coverage_pct,status" > "$SUMMARY_CSV"
@@ -87,13 +86,13 @@ bwa mem -t "$THREADS" "$REF" "$R1_FILE" "$R2_FILE" \
 | samtools view -bS - > "$RAW_BAM"
 
 # ===================== SORT =====================
-samtools sort "$RAW_BAM" -o "$SORTED_BAM"
+samtools sort -@ "$THREADS" "$RAW_BAM" -o "$SORTED_BAM"
 rm -f "$RAW_BAM"
 
 samtools index "$SORTED_BAM"
 
 # ===================== ADD READ GROUPS =====================
-java -jar "$PICARD_JAR" AddOrReplaceReadGroups \
+picard AddOrReplaceReadGroups \
     I="$SORTED_BAM" \
     O="$NAMED_BAM" \
     RGID=1 \
@@ -104,7 +103,7 @@ java -jar "$PICARD_JAR" AddOrReplaceReadGroups \
     VALIDATION_STRINGENCY=LENIENT
 
 # ===================== MARK DUPLICATES =====================
-java -jar "$PICARD_JAR" MarkDuplicates \
+picard MarkDuplicates \
     I="$NAMED_BAM" \
     O="$FINAL_BAM" \
     M="$METRICS_FILE" \
@@ -141,4 +140,3 @@ rm -rf "$TMP_DIR"
 echo "[DONE] BWA finished for ${BIOSAMPLE} → ${status}"
 echo "[OUT] ${FINAL_BAM}"
 echo "[OUT] ${SUMMARY_CSV}"
-

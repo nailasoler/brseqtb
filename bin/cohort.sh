@@ -10,23 +10,16 @@
 #   - --demo  : adiciona gVCFs de assets/demo/gatk/
 #
 # Notes:
-#   - Reprodutível (usa apenas micromamba brseqtb)
+#   - Reprodutível (usa Conda environment ativado pelo Nextflow)
 #   - Seguro para execução via Nextflow (work/)
 # ============================================================
 
 set -euo pipefail
 
 # ============================================================
-# PROJECT / ENVIRONMENT
+# PROJECT
 # ============================================================
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
-MAMBA_ROOT="${PROJECT_DIR}/.micromamba"
-ENV_BIN="${MAMBA_ROOT}/envs/brseqtb/bin"
-
-export PATH="${ENV_BIN}:${PROJECT_DIR}/bin:${PATH}"
-
-GATK="${ENV_BIN}/gatk"
 
 # ============================================================
 # ARGUMENT PARSING
@@ -66,6 +59,16 @@ DEMO_DIR="${PROJECT_DIR}/assets/demo/gatk"
 THREADS="${THREADS:-1}"
 
 mkdir -p "${OUTPUT_DIR}"
+
+# ============================================================
+# DEPENDENCY CHECKS
+# ============================================================
+for cmd in gatk; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "[ERROR] Required command not found in Conda environment: $cmd"
+        exit 1
+    fi
+done
 
 # ============================================================
 # INPUT CHECKS
@@ -131,7 +134,7 @@ echo "[INFO] Total gVCFs in cohort: ${#GVCF_FILES[@]}"
 rm -rf "$DB_PATH"
 
 echo "[RUN] GenomicsDBImport..."
-"$GATK" GenomicsDBImport \
+gatk GenomicsDBImport \
     --genomicsdb-workspace-path "$DB_PATH" \
     --intervals "$BED" \
     $(for v in "${GVCF_FILES[@]}"; do echo "-V $v"; done) \
@@ -142,7 +145,7 @@ echo "[RUN] GenomicsDBImport..."
 # ============================================================
 COHORT_RAW="${OUTPUT_DIR}/cohort_raw.vcf.gz"
 
-"$GATK" GenotypeGVCFs \
+gatk GenotypeGVCFs \
     -R "$REF" \
     -V "gendb://$DB_PATH" \
     -O "$COHORT_RAW"
@@ -153,20 +156,20 @@ COHORT_RAW="${OUTPUT_DIR}/cohort_raw.vcf.gz"
 COHORT_SNPS="${OUTPUT_DIR}/cohort_snps.vcf.gz"
 COHORT_INDELS="${OUTPUT_DIR}/cohort_indels.vcf.gz"
 
-"$GATK" SelectVariants -V "$COHORT_RAW" --select-type-to-include SNP   -O "$COHORT_SNPS"
-"$GATK" SelectVariants -V "$COHORT_RAW" --select-type-to-include INDEL -O "$COHORT_INDELS"
+gatk SelectVariants -V "$COHORT_RAW" --select-type-to-include SNP   -O "$COHORT_SNPS"
+gatk SelectVariants -V "$COHORT_RAW" --select-type-to-include INDEL -O "$COHORT_INDELS"
 
 # ============================================================
-# HARD FILTERING (CORRIGIDO)
+# HARD FILTERING
 # ============================================================
-"$GATK" VariantFiltration \
+gatk VariantFiltration \
     -V "$COHORT_SNPS" \
     -filter "QD < 2.0"   --filter-name "QD2" \
     -filter "QUAL < 30.0" --filter-name "QUAL30" \
     -filter "FS > 60.0"  --filter-name "FS60" \
     -O "$SNPS_FILTERED"
 
-"$GATK" VariantFiltration \
+gatk VariantFiltration \
     -V "$COHORT_INDELS" \
     -filter "QUAL < 30.0" --filter-name "QUAL30" \
     -filter "FS > 200.0"  --filter-name "FS200" \
@@ -180,4 +183,3 @@ find "$OUTPUT_DIR" -type f -name "*.tbi" -delete
 
 echo "[DONE] Cohort completed successfully."
 echo "[OUT] ${OUTPUT_DIR}"
-

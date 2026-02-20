@@ -83,22 +83,12 @@ params.qc_summary_cpus         = 1      // fan-in
 params.clinical_report_cpus   = 1       // fan-out
 
 
+
 /*
  * ============================================================
  * BLOCK 1 - INIT CHAIN — ALWAYS RUN ONCE (CACHED)
  * ============================================================
  */
-
-process MICROMAMBA_SETUP {
-    tag "micromamba-setup"
-    input: val token
-    output: val true
-    script:
-    """
-    cd "${projectDir}"
-    bash bin/micromamba_setup.sh
-    """
-}
 
 process KAIJU_DB {
     tag "kaiju-db"
@@ -118,7 +108,7 @@ process OMS_CATALOG {
     script:
     """
     cd "${projectDir}"
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python bin/omsCatalog.py
+    python bin/omsCatalog.py
     """
 }
 
@@ -155,7 +145,6 @@ process SNPEFF_DB {
     """
 }
 
-
 process MAKE_MANIFEST_VALIDATE {
 
     input:
@@ -168,7 +157,7 @@ process MAKE_MANIFEST_VALIDATE {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/make_manifest_validate.py \
+    python ${projectDir}/bin/make_manifest_validate.py \
         --xlsx ${input_table} \
         --reads ${reads_dir} \
         --out manifest.tsv
@@ -407,7 +396,7 @@ process TBDR_RCOV {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/tbdrRCov.py "${biosample}"
+    python ${projectDir}/bin/tbdrRCov.py "${biosample}"
 
     mkdir -p tbdrRCov
     cp -r ${projectDir}/tbdrRCov/${biosample} tbdrRCov/
@@ -446,7 +435,7 @@ process LINEAGE {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/lineage.py "${biosample}"
+    python ${projectDir}/bin/lineage.py "${biosample}"
 
     mkdir -p lineage
     cp -r ${projectDir}/lineage/${biosample} lineage/
@@ -487,7 +476,7 @@ process COHORT_FILTER {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/cohortFilter.py
+    python ${projectDir}/bin/cohortFilter.py
 
     mkdir -p cohort_filtered
     cp -r ${projectDir}/cohort_filtered/* cohort_filtered/ || true
@@ -516,7 +505,7 @@ process SNP_MATRIX {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/snpMatrix.py
+    python ${projectDir}/bin/snpMatrix.py
     """
 }
 
@@ -536,13 +525,12 @@ process TRANSMISSION {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/transmission.py
+    python ${projectDir}/bin/transmission.py
 
     mkdir -p transmission
     cp -r ${projectDir}/transmission/* transmission/ || true
     """
 }
-
 
 
 /*
@@ -587,7 +575,7 @@ process MIXINFECTION {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/mixInfection.py ${biosample}
+    python ${projectDir}/bin/mixInfection.py ${biosample}
 
     mkdir -p mixInfection/${biosample}
     cp -r ${projectDir}/mixInfection/${biosample}/* mixInfection/${biosample}/ || true
@@ -606,7 +594,7 @@ process RESISTANCE_TARGET {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/resistanceTarget.py "${biosample}"
+    python ${projectDir}/bin/resistanceTarget.py "${biosample}"
 
     cp ${projectDir}/resistance/${biosample}/${biosample}_OMStarget.xlsx .
     """
@@ -628,7 +616,7 @@ process RESISTANCE_REPORT {
     """
     BIOSAMPLE=\$(basename "${omstarget}" _OMStarget.xlsx)
 
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/resistanceReport.py "\$BIOSAMPLE"
+    python ${projectDir}/bin/resistanceReport.py "\$BIOSAMPLE"
 
     cp ${projectDir}/results/resistance/\$BIOSAMPLE.xlsx .
     """
@@ -652,7 +640,7 @@ process RESISTANCE_SUMMARY {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/resistanceSummary.py
+    python ${projectDir}/bin/resistanceSummary.py
     """
 }
 
@@ -668,7 +656,7 @@ process QC_SUMMARY {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/qcSummary.py
+    python ${projectDir}/bin/qcSummary.py
     """
 }
 
@@ -691,13 +679,12 @@ process CLINICAL_REPORT {
 
     script:
     """
-    ${projectDir}/.micromamba/envs/brseqtb/bin/python ${projectDir}/bin/clinicalReport.py ${biosample}
+    python ${projectDir}/bin/clinicalReport.py ${biosample}
 
     mkdir -p clinicalReport
     cp ${projectDir}/results/clinicalReport/${biosample}.docx clinicalReport/
     """
 }
-
 
 /*
  * ============================================================
@@ -709,7 +696,6 @@ workflow {
 
     def ch_init = Channel.value(true)
 
-    ch_init = MICROMAMBA_SETUP(ch_init)
     ch_init = KAIJU_DB(ch_init)
     ch_init = OMS_CATALOG(ch_init)
     ch_init = BWA_REF(ch_init)
@@ -810,4 +796,5 @@ workflow {
         .map { true }
 
 }
+
 
