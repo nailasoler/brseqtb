@@ -27,10 +27,8 @@ if ! command -v snpEff >/dev/null 2>&1; then
     exit 1
 fi
 
-SNPEFF_BIN="$(which snpEff)"
-SNPEFF_BASE_DIR="$(dirname "$SNPEFF_BIN")/../share/snpeff"
-SNPEFF_CONFIG="${SNPEFF_BASE_DIR}/snpEff.config"
-SNPEFF_DATA_DIR="${SNPEFF_BASE_DIR}/data/${GENOME_DB}"
+SNPEFF_CONFIG="${CONDA_PREFIX}/share/snpeff/snpEff.config"
+SNPEFF_DATA_DIR="${CONDA_PREFIX}/share/snpeff/data/${GENOME_DB}"
 
 # -------------------- Reference inputs --------------------
 REF_DIR="${PROJECT_DIR}/database/mtbRef"
