@@ -686,12 +686,6 @@ process CLINICAL_REPORT {
     """
 }
 
-/*
- * ============================================================
- * WORKFLOW — DEFINITIVO
- * ============================================================
- */
-
 workflow {
 
     /*
@@ -714,38 +708,49 @@ workflow {
     /*
      * BIOSAMPLES
      */
-    def ch_biosamples = ch_manifest
+    def ch_samples = ch_manifest
         .splitCsv(header: true, sep: '\t')
         .map { row -> tuple(row.biosample, true) }
 
     /*
      * BLOCK 2
      */
-    def ch_fastqc = ch_biosamples | FASTQC
-    def ch_trim   = ch_biosamples | TRIMMOMATIC
+    def ch_fastqc = ch_samples | FASTQC
+    def ch_trim   = ch_samples | TRIMMOMATIC
 
     def ch_bwa    = ch_trim | BWA
     def ch_kaiju  = ch_trim | KAIJU
 
     /*
-     * BLOCK 3
+     * BLOCK 3 (TODOS DEPENDEM DO BWA)
      */
     def ch_delly      = DELLY(ch_bwa)
     def ch_lofreq     = LOFREQ(ch_bwa)
     def ch_gatk_gvcf  = GATK_GVCF(ch_bwa)
     def ch_gatk_vcf   = GATK_VCF(ch_bwa)
 
+    /*
+     * NORM depende do GATK_VCF
+     */
     def ch_norm = ch_gatk_vcf | NORM
 
     /*
-     * BLOCK 4
+     * SNPEFF também depende do BWA (como declarado)
      */
-    def ch_snpeff     = ch_norm | SNPEFF
+    def ch_snpeff = SNPEFF(ch_bwa)
 
-    def ch_tbdr_rcov  = ch_biosamples.map { it[0] } | TBDR_RCOV
-    def ch_ntm_filter = ch_biosamples.map { it[0] } | NTM_FILTER
-    def ch_lineage    = ch_biosamples.map { it[0] } | LINEAGE
+    /*
+     * BLOCK 4 (biosample puro)
+     */
+    def ch_biosample_only = ch_samples.map { it[0] }
 
+    def ch_tbdr   = ch_biosample_only | TBDR_RCOV
+    def ch_ntm    = ch_biosample_only | NTM_FILTER
+    def ch_line   = ch_biosample_only | LINEAGE
+
+    /*
+     * COHORT (fan-in)
+     */
     def ch_cohort     = Channel.value(true) | COHORT
     def ch_cohort_f   = ch_cohort | COHORT_FILTER
 
@@ -759,10 +764,9 @@ workflow {
     /*
      * BLOCK 6
      */
-    def ch_mixinfection = ch_biosamples.map { it[0] } | MIXINFECTION
-
-    def ch_target = ch_biosamples.map { it[0] } | RESISTANCE_TARGET
-    def ch_report = ch_target | RESISTANCE_REPORT
+    def ch_mix   = ch_biosample_only | MIXINFECTION
+    def ch_targ  = ch_biosample_only | RESISTANCE_TARGET
+    def ch_rep   = ch_targ | RESISTANCE_REPORT
 
     /*
      * BLOCK 7
@@ -773,9 +777,6 @@ workflow {
     /*
      * BLOCK 8
      */
-    def ch_clinical = ch_biosamples.map { it[0] } | CLINICAL_REPORT
-
+    def ch_clinical = ch_biosample_only | CLINICAL_REPORT
 }
-
-
 
