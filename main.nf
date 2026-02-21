@@ -690,7 +690,7 @@ workflow {
 
     /*
      * ========================================================
-     * BLOCO 1 — INIT (run once)
+     * BLOCO 1 — INIT
      * ========================================================
      */
 
@@ -708,18 +708,17 @@ workflow {
         file("${projectDir}/reads")
     )
 
-    // 🔒 BLOCO 1 TERMINA AQUI
-    def block1_done = ch_manifest.map { true }
+    def ch_samples = ch_manifest
+        .splitCsv(header:true, sep:'\t')
+        .map { row -> tuple(row.biosample, true) }
+
+    def ch_biosample_only = ch_samples.map { it[0] }
 
     /*
      * ========================================================
      * BLOCO 2 — PREPROCESS
      * ========================================================
      */
-
-    def ch_samples = ch_manifest
-        .splitCsv(header:true, sep:'\t')
-        .map { row -> tuple(row.biosample, true) }
 
     def ch_fastqc = ch_samples | FASTQC
     def ch_trim   = ch_samples | TRIMMOMATIC
@@ -730,7 +729,7 @@ workflow {
 
     def ch_kaiju = ch_trim | KAIJU
 
-    // 🔒 BLOCO 2 TERMINA QUANDO TODOS BWA TERMINAM
+    // 🔒 BLOCO 2 termina quando todos BWA terminam
     def block2_done = ch_bwa_tuple.collect().map { true }
 
     /*
@@ -749,7 +748,7 @@ workflow {
 
     def ch_norm = NORM(ch_gatk_dir, ch_gatk_vcf)
 
-    // 🔒 BLOCO 3 TERMINA QUANDO TODOS NORM TERMINAM
+    // 🔒 BLOCO 3 termina quando TODOS NORM terminam
     def block3_done = ch_norm.collect().map { true }
 
     /*
@@ -758,18 +757,19 @@ workflow {
      * ========================================================
      */
 
-    def ch_snpeff = SNPEFF(ch_bwa_tuple, ch_bwa_summary)
+    // agora TODOS processos recebem bloqueio explícito
+    def ch_block4_samples = block3_done
+        .combine(ch_biosample_only)
+        .map { it[1] }
 
-    def ch_biosample_only = ch_samples.map { it[0] }
-
-    def ch_tbdr    = ch_biosample_only | TBDR_RCOV
-    def ch_ntm     = ch_biosample_only | NTM_FILTER
-    def ch_lineage = ch_biosample_only | LINEAGE
+    def ch_snpeff  = SNPEFF(ch_bwa_tuple, ch_bwa_summary)
+    def ch_tbdr    = ch_block4_samples | TBDR_RCOV
+    def ch_ntm     = ch_block4_samples | NTM_FILTER
+    def ch_lineage = ch_block4_samples | LINEAGE
 
     def ch_cohort   = block3_done | COHORT
     def ch_cohort_f = ch_cohort | COHORT_FILTER
 
-    // 🔒 BLOCO 4 TERMINA QUANDO cohortFilter TERMINA
     def block4_done = ch_cohort_f.map { true }
 
     /*
@@ -779,11 +779,9 @@ workflow {
      */
 
     def ch_snp_matrix = block4_done | SNP_MATRIX
+    def ch_trans      = ch_snp_matrix | TRANSMISSION
+    def ch_iqtree     = ch_snp_matrix | IQTREE
 
-    def ch_trans  = ch_snp_matrix | TRANSMISSION
-    def ch_iqtree = ch_snp_matrix | IQTREE
-
-    // 🔒 BLOCO 5 TERMINA QUANDO snpMatrix TERMINA
     def block5_done = ch_snp_matrix.map { true }
 
     /*
@@ -792,19 +790,14 @@ workflow {
      * ========================================================
      */
 
-    def ch_mix = block5_done
+    def ch_block6_samples = block5_done
         .combine(ch_biosample_only)
         .map { it[1] }
-        | MIXINFECTION
 
-    def ch_target = block5_done
-        .combine(ch_biosample_only)
-        .map { it[1] }
-        | RESISTANCE_TARGET
-
+    def ch_mix    = ch_block6_samples | MIXINFECTION
+    def ch_target = ch_block6_samples | RESISTANCE_TARGET
     def ch_report = ch_target | RESISTANCE_REPORT
 
-    // 🔒 BLOCO 6 TERMINA QUANDO TODOS REPORTS TERMINAM
     def block6_done = ch_report.collect().map { true }
 
     /*
@@ -824,8 +817,9 @@ workflow {
      * ========================================================
      */
 
-    def ch_clinical = block7_done
+    def ch_block8_samples = block7_done
         .combine(ch_biosample_only)
         .map { it[1] }
-        | CLINICAL_REPORT
+
+    def ch_clinical = ch_block8_samples | CLINICAL_REPORT
 }
