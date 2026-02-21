@@ -688,160 +688,181 @@ process CLINICAL_REPORT {
 
 /*
  * ============================================================
- * WORKFLOW (DSL2 CLEAN STRUCTURE)
+ * WORKFLOW - ajustado mantendo estrutura original
  * ============================================================
  */
 
 workflow {
 
     /*
-     * ============================================================
-     * BLOCO 1 — INIT (RUN ONCE)
-     * ============================================================
-     */
+    * ========================================================
+    * BLOCK 1 — INIT CHAIN
+    * ========================================================
+    */
 
     def ch_init = Channel.value(true)
 
-    KAIJU_DB(ch_init)
-    OMS_CATALOG(ch_init)
-    BWA_REF(ch_init)
-    GATK_DICT(ch_init)
-    SNPEFF_DB(ch_init)
+    ch_init = KAIJU_DB(ch_init)
+    ch_init = OMS_CATALOG(ch_init)
+    ch_init = BWA_REF(ch_init)
+    ch_init = GATK_DICT(ch_init)
+    ch_init = SNPEFF_DB(ch_init)
 
     def ch_input_table = Channel.fromPath("${projectDir}/input/input_table.xlsx")
     def ch_reads_dir   = Channel.fromPath("${projectDir}/reads")
 
-    def manifest_result = MAKE_MANIFEST_VALIDATE(
+    def ch_manifest = MAKE_MANIFEST_VALIDATE(
         ch_init,
         ch_input_table,
         ch_reads_dir
     )
 
-    def ch_manifest = manifest_result.out[0]
+    /*
+    * ========================================================
+    * BLOCK 2 — PREPROCESS
+    * ========================================================
+    */
 
     def ch_biosamples = ch_manifest
         .splitCsv(header: true, sep: '\t')
         .map { row -> row.biosample }
 
-    def ch_block1_done = ch_biosamples.collect().map { true }
+    ch_biosamples.combine(ch_init) | FASTQC
 
+    def ch_trim = ch_biosamples
+        .combine(ch_init)
+        | TRIMMOMATIC
 
-    /*
-     * ============================================================
-     * BLOCO 2 — PREPROCESS
-     * ============================================================
-     */
+    def ch_bwa   = ch_trim | BWA
+    def ch_kaiju = ch_trim | KAIJU
 
-    def fastqc_result = FASTQC(
-        ch_biosamples.combine(ch_block1_done).map{ it[0] }
-    )
-
-    def trim_result = TRIMMOMATIC(
-        ch_biosamples.combine(ch_block1_done).map{ it[0] }
-    )
-
-    def bwa_result = BWA(trim_result.out[0])
-    def ch_bwa_dir     = bwa_result.out[0]
-    def ch_bwa_summary = bwa_result.out[1]
-
-    def kaiju_result = KAIJU(trim_result.out[0])
-
-    def ch_block2_done = ch_bwa_dir.collect().map { true }
-
+    def ch_block2_done = ch_trim
+        .collect()
+        .map { true }
 
     /*
-     * ============================================================
-     * BLOCO 3 — VARIANT CALLING
-     * ============================================================
-     */
+    * ========================================================
+    * BLOCK 3 — VARIANT CALLING
+    * ========================================================
+    */
 
-    def delly_result = DELLY(ch_bwa_dir)
-    def lofreq_result = LOFREQ(ch_bwa_dir)
-    def ch_lofreq_dir = lofreq_result.out[0]
+    def ch_delly      = ch_bwa | DELLY
+    def ch_lofreq     = ch_bwa | LOFREQ
+    def ch_gatk_gvcf  = ch_bwa | GATK_GVCF
+    def ch_gatk_vcf   = ch_bwa | GATK_VCF
 
-    def gatk_gvcf_result = GATK_GVCF(ch_bwa_dir)
+    def ch_norm       = ch_gatk_vcf | NORM
 
-    def gatk_vcf_result = GATK_VCF(ch_bwa_dir)
-    def ch_gatk_vcf_dir = gatk_vcf_result.out[0]
-
-    def norm_result = NORM(ch_gatk_vcf_dir)
-    def ch_norm_dir = norm_result.out[0]
-
-    def ch_block3_done = ch_norm_dir.collect().map { true }
-
+    def ch_block3_done = ch_norm
+        .collect()
+        .map { true }
 
     /*
-     * ============================================================
-     * BLOCO 4 — ANNOTATION + COHORT
-     * ============================================================
-     */
+    * ========================================================
+    * BLOCK 4 — ANNOTATION / FILTERING
+    * ========================================================
+    */
 
-    SNPEFF(ch_norm_dir)
-    TBDR_RCOV(ch_lofreq_dir.map{ it.baseName })
-    NTM_FILTER(ch_lofreq_dir.map{ it.baseName })
-    LINEAGE(ch_norm_dir.map{ it.baseName })
+    // SNPEFF depende de NORM (e não mais de BWA)
+    def ch_snpeff = ch_norm | SNPEFF
 
-    def ch_block4_samples_done = ch_norm_dir.collect().map { true }
+    // TBDR e NTM agora dependem de LOFREQ (corrigido)
+    def ch_tbdr_rcov = ch_lofreq
+        .map { it.baseName }
+        | TBDR_RCOV
 
-    def cohort_result = COHORT(ch_block4_samples_done)
-    def cohort_filter_result = COHORT_FILTER(cohort_result.out[0])
+    def ch_ntm_filter = ch_lofreq
+        .map { it.baseName }
+        | NTM_FILTER
 
-    def ch_block4_done = cohort_filter_result.out[0].map { true }
-
-
-    /*
-     * ============================================================
-     * BLOCO 5 — PHYLOGENY
-     * ============================================================
-     */
-
-    def snp_matrix_result = SNP_MATRIX(ch_block4_done)
-    def transmission_result = TRANSMISSION(snp_matrix_result.out[0])
-    def iqtree_result = IQTREE(snp_matrix_result.out[0])
-
-    def ch_block5_done = snp_matrix_result.out[0].map { true }
-
+    // LINEAGE depende de NORM
+    def ch_lineage = ch_norm
+        .map { it.baseName }
+        | LINEAGE
 
     /*
-     * ============================================================
-     * BLOCO 6 — RESISTANCE
-     * ============================================================
-     */
+    * ========================================================
+    * BLOCK 4 — GLOBAL BARRIER
+    * ========================================================
+    */
 
-    MIXINFECTION(
-        ch_biosamples.combine(ch_block5_done).map{ it[0] }
-    )
+    def ch_block4_samples_done = ch_norm
+        .collect()
+        .map { true }
 
-    def resistance_target_result = RESISTANCE_TARGET(
-        ch_biosamples.combine(ch_block5_done).map{ it[0] }
-    )
+    def ch_cohort = ch_block4_samples_done | COHORT
+    def ch_cohort_filtered = ch_cohort | COHORT_FILTER
 
-    def resistance_report_result =
-        RESISTANCE_REPORT(resistance_target_result.out[0])
-
-    def ch_block6_done = resistance_report_result.out[0].collect().map { true }
-
+    def ch_block4_done = ch_cohort_filtered
+        .collect()
+        .map { true }
 
     /*
-     * ============================================================
-     * BLOCO 7 — SUMMARY
-     * ============================================================
-     */
+    * ========================================================
+    * BLOCK 5 — PHYLOGENY
+    * ========================================================
+    */
 
-    def resistance_summary_result = RESISTANCE_SUMMARY(ch_block6_done)
-    def qc_summary_result = QC_SUMMARY(resistance_summary_result.out[0])
+    def ch_snp_matrix_done = ch_block4_done | SNP_MATRIX
 
-    def ch_block7_done = qc_summary_result.out[0].map { true }
+    def ch_transmission = ch_snp_matrix_done | TRANSMISSION
+    def ch_iqtree       = ch_snp_matrix_done | IQTREE
 
+    def ch_block5_done = ch_snp_matrix_done
+        .collect()
+        .map { true }
 
     /*
-     * ============================================================
-     * BLOCO 8 — CLINICAL REPORT
-     * ============================================================
-     */
+    * ========================================================
+    * BLOCK 6 — RESISTANCE
+    * ========================================================
+    */
 
-    CLINICAL_REPORT(
-        ch_biosamples.combine(ch_block7_done).map{ it[0] }
-    )
+    def ch_mixinfection = ch_biosamples
+        .combine(ch_block5_done)
+        .map { biosample, _ -> biosample }
+        | MIXINFECTION
+
+    def ch_resistance_target = ch_biosamples
+        .combine(ch_block5_done)
+        .map { biosample, _ -> biosample }
+        | RESISTANCE_TARGET
+
+    def ch_resistance_report = ch_resistance_target
+        | RESISTANCE_REPORT
+
+    def ch_block6_done = ch_resistance_report
+        .collect()
+        .map { true }
+
+    /*
+    * ========================================================
+    * BLOCK 7 — SUMMARY
+    * ========================================================
+    */
+
+    def ch_resistance_summary_done = ch_block6_done
+        | RESISTANCE_SUMMARY
+
+    def ch_qc_summary_done = ch_resistance_summary_done
+        | QC_SUMMARY
+
+    def ch_block7_done = ch_qc_summary_done
+        .map { true }
+
+    /*
+    * ========================================================
+    * BLOCK 8 — CLINICAL REPORT
+    * ========================================================
+    */
+
+    def ch_clinical_report = ch_biosamples
+        .combine(ch_block7_done)
+        .map { biosample, _ -> biosample }
+        | CLINICAL_REPORT
+
+    def ch_block8_done = ch_clinical_report
+        .collect()
+        .map { true }
 
 }
