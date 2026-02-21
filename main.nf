@@ -726,7 +726,7 @@ workflow {
 
     /*
      * ============================================================
-     * BLOCO 2 — PREPROCESS (PARALLEL PER BIOSAMPLE)
+     * BLOCO 2 — PREPROCESS
      * ============================================================
      */
 
@@ -740,23 +740,31 @@ workflow {
         .map { biosample, _ -> biosample }
         | TRIMMOMATIC
 
-    def ch_bwa   = ch_trim | BWA
+    def bwa_result = ch_trim | BWA
+    def ch_bwa_dir = bwa_result.out[0]
+    def ch_bwa_summary = bwa_result.out[1]
+
     def ch_kaiju = ch_trim | KAIJU
 
-    def ch_block2_done = ch_bwa.collect().map { true }
+    def ch_block2_done = ch_bwa_dir.collect().map { true }
 
 
     /*
      * ============================================================
-     * BLOCO 3 — VARIANT CALLING (PARALLEL)
+     * BLOCO 3 — VARIANT CALLING
      * ============================================================
      */
 
-    def ch_delly      = ch_bwa | DELLY
-    def ch_lofreq     = ch_bwa | LOFREQ
-    def ch_gatk_gvcf  = ch_bwa | GATK_GVCF
-    def ch_gatk_vcf   = ch_bwa | GATK_VCF
-    def ch_norm       = ch_gatk_vcf | NORM
+    def ch_delly = ch_bwa_dir | DELLY
+
+    def ch_lofreq = ch_bwa_dir | LOFREQ
+
+    def ch_gatk_gvcf = ch_bwa_dir | GATK_GVCF
+
+    def gatk_vcf_result = ch_bwa_dir | GATK_VCF
+    def ch_gatk_vcf_dir = gatk_vcf_result.out[0]
+
+    def ch_norm = ch_gatk_vcf_dir | NORM
 
     def ch_block3_done = ch_norm.collect().map { true }
 
@@ -797,7 +805,7 @@ workflow {
 
     /*
      * ============================================================
-     * BLOCO 5 — PHYLOGENY / TRANSMISSION (COHORT)
+     * BLOCO 5 — PHYLOGENY / TRANSMISSION
      * ============================================================
      */
 
@@ -810,7 +818,7 @@ workflow {
 
     /*
      * ============================================================
-     * BLOCO 6 — RESISTANCE (PARALLEL PER BIOSAMPLE)
+     * BLOCO 6 — RESISTANCE
      * ============================================================
      */
 
@@ -819,19 +827,21 @@ workflow {
         .map { biosample, _ -> biosample }
         | MIXINFECTION
 
-    def ch_resistance_target = ch_biosamples
+    def resistance_target_result = ch_biosamples
         .combine(ch_block5_done)
         .map { biosample, _ -> biosample }
         | RESISTANCE_TARGET
 
-    def ch_resistance_report = ch_resistance_target | RESISTANCE_REPORT
+    def ch_resistance_target_file = resistance_target_result.out[0]
+
+    def ch_resistance_report = ch_resistance_target_file | RESISTANCE_REPORT
 
     def ch_block6_done = ch_resistance_report.collect().map { true }
 
 
     /*
      * ============================================================
-     * BLOCO 7 — SUMMARY (COHORT)
+     * BLOCO 7 — SUMMARY
      * ============================================================
      */
 
@@ -843,7 +853,7 @@ workflow {
 
     /*
      * ============================================================
-     * BLOCO 8 — CLINICAL REPORT (PARALLEL PER BIOSAMPLE)
+     * BLOCO 8 — CLINICAL REPORT
      * ============================================================
      */
 
@@ -853,5 +863,3 @@ workflow {
         | CLINICAL_REPORT
 
 }
-
-
