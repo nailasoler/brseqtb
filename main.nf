@@ -690,7 +690,7 @@ workflow {
 
     /*
      * ========================================================
-     * BLOCO 1 — INIT (Roda 1 vez)
+     * BLOCO 1 — INIT (run once)
      * ========================================================
      */
 
@@ -708,27 +708,30 @@ workflow {
         file("${projectDir}/reads")
     )
 
-    /*
-     * Extrair biosamples
-     */
-    def ch_samples = ch_manifest
-        .splitCsv(header: true, sep: '\t')
-        .map { row -> tuple(row.biosample, true) }
+    // 🔒 BLOCO 1 TERMINA AQUI
+    def block1_done = ch_manifest.map { true }
 
     /*
      * ========================================================
-     * BLOCO 2 — PREPROCESS (paralelo por biosample)
+     * BLOCO 2 — PREPROCESS
      * ========================================================
      */
+
+    def ch_samples = ch_manifest
+        .splitCsv(header:true, sep:'\t')
+        .map { row -> tuple(row.biosample, true) }
 
     def ch_fastqc = ch_samples | FASTQC
     def ch_trim   = ch_samples | TRIMMOMATIC
 
-    def ch_bwa    = ch_trim | BWA
-    def ch_kaiju  = ch_trim | KAIJU
+    def bwa_out = ch_trim | BWA
+    def ch_bwa_tuple   = bwa_out[0]
+    def ch_bwa_summary = bwa_out[1]
 
-    // BARREIRA BLOCO 2
-    def block2_done = ch_bwa.collect().map { true }
+    def ch_kaiju = ch_trim | KAIJU
+
+    // 🔒 BLOCO 2 TERMINA QUANDO TODOS BWA TERMINAM
+    def block2_done = ch_bwa_tuple.collect().map { true }
 
     /*
      * ========================================================
@@ -736,14 +739,17 @@ workflow {
      * ========================================================
      */
 
-    def ch_delly      = DELLY(ch_bwa)
-    def ch_lofreq     = LOFREQ(ch_bwa)
-    def ch_gatk_gvcf  = GATK_GVCF(ch_bwa)
-    def ch_gatk_vcf   = GATK_VCF(ch_bwa)
+    def ch_delly      = DELLY(ch_bwa_tuple, ch_bwa_summary)
+    def ch_lofreq     = LOFREQ(ch_bwa_tuple, ch_bwa_summary)
+    def ch_gatk_gvcf  = GATK_GVCF(ch_bwa_tuple, ch_bwa_summary)
 
-    def ch_norm       = ch_gatk_vcf | NORM
+    def gatk_vcf_out  = GATK_VCF(ch_bwa_tuple, ch_bwa_summary)
+    def ch_gatk_dir   = gatk_vcf_out[0]
+    def ch_gatk_vcf   = gatk_vcf_out[1]
 
-    // BARREIRA BLOCO 3
+    def ch_norm = NORM(ch_gatk_dir, ch_gatk_vcf)
+
+    // 🔒 BLOCO 3 TERMINA QUANDO TODOS NORM TERMINAM
     def block3_done = ch_norm.collect().map { true }
 
     /*
@@ -752,18 +758,18 @@ workflow {
      * ========================================================
      */
 
-    def ch_snpeff     = SNPEFF(ch_bwa)
+    def ch_snpeff = SNPEFF(ch_bwa_tuple, ch_bwa_summary)
 
     def ch_biosample_only = ch_samples.map { it[0] }
 
-    def ch_tbdr       = ch_biosample_only | TBDR_RCOV
-    def ch_ntm        = ch_biosample_only | NTM_FILTER
-    def ch_lineage    = ch_biosample_only | LINEAGE
+    def ch_tbdr    = ch_biosample_only | TBDR_RCOV
+    def ch_ntm     = ch_biosample_only | NTM_FILTER
+    def ch_lineage = ch_biosample_only | LINEAGE
 
-    def ch_cohort     = block3_done | COHORT
-    def ch_cohort_f   = ch_cohort | COHORT_FILTER
+    def ch_cohort   = block3_done | COHORT
+    def ch_cohort_f = ch_cohort | COHORT_FILTER
 
-    // BARREIRA BLOCO 4
+    // 🔒 BLOCO 4 TERMINA QUANDO cohortFilter TERMINA
     def block4_done = ch_cohort_f.map { true }
 
     /*
@@ -774,10 +780,10 @@ workflow {
 
     def ch_snp_matrix = block4_done | SNP_MATRIX
 
-    def ch_trans      = ch_snp_matrix | TRANSMISSION
-    def ch_iqtree     = ch_snp_matrix | IQTREE
+    def ch_trans  = ch_snp_matrix | TRANSMISSION
+    def ch_iqtree = ch_snp_matrix | IQTREE
 
-    // BARREIRA BLOCO 5
+    // 🔒 BLOCO 5 TERMINA QUANDO snpMatrix TERMINA
     def block5_done = ch_snp_matrix.map { true }
 
     /*
@@ -786,7 +792,7 @@ workflow {
      * ========================================================
      */
 
-    def ch_mix   = block5_done
+    def ch_mix = block5_done
         .combine(ch_biosample_only)
         .map { it[1] }
         | MIXINFECTION
@@ -798,7 +804,7 @@ workflow {
 
     def ch_report = ch_target | RESISTANCE_REPORT
 
-    // BARREIRA BLOCO 6
+    // 🔒 BLOCO 6 TERMINA QUANDO TODOS REPORTS TERMINAM
     def block6_done = ch_report.collect().map { true }
 
     /*
@@ -810,7 +816,6 @@ workflow {
     def ch_res_sum = block6_done | RESISTANCE_SUMMARY
     def ch_qc_sum  = ch_res_sum | QC_SUMMARY
 
-    // BARREIRA BLOCO 7
     def block7_done = ch_qc_sum.map { true }
 
     /*
