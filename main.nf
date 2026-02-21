@@ -689,10 +689,14 @@ process CLINICAL_REPORT {
 workflow {
 
     /*
-     * INIT
+     * ========================================================
+     * BLOCO 1 — INIT (Roda 1 vez)
+     * ========================================================
      */
+
     def ch_init = Channel.value(true)
 
+    ch_init = MICROMAMBA_SETUP(ch_init)
     ch_init = KAIJU_DB(ch_init)
     ch_init = OMS_CATALOG(ch_init)
     ch_init = BWA_REF(ch_init)
@@ -706,77 +710,118 @@ workflow {
     )
 
     /*
-     * BIOSAMPLES
+     * Extrair biosamples
      */
     def ch_samples = ch_manifest
         .splitCsv(header: true, sep: '\t')
         .map { row -> tuple(row.biosample, true) }
 
     /*
-     * BLOCK 2
+     * ========================================================
+     * BLOCO 2 — PREPROCESS (paralelo por biosample)
+     * ========================================================
      */
+
     def ch_fastqc = ch_samples | FASTQC
     def ch_trim   = ch_samples | TRIMMOMATIC
 
     def ch_bwa    = ch_trim | BWA
     def ch_kaiju  = ch_trim | KAIJU
 
+    // BARREIRA BLOCO 2
+    def block2_done = ch_bwa.collect().map { true }
+
     /*
-     * BLOCK 3 (TODOS DEPENDEM DO BWA)
+     * ========================================================
+     * BLOCO 3 — VARIANT CALLING
+     * ========================================================
      */
+
     def ch_delly      = DELLY(ch_bwa)
     def ch_lofreq     = LOFREQ(ch_bwa)
     def ch_gatk_gvcf  = GATK_GVCF(ch_bwa)
     def ch_gatk_vcf   = GATK_VCF(ch_bwa)
 
-    /*
-     * NORM depende do GATK_VCF
-     */
-    def ch_norm = ch_gatk_vcf | NORM
+    def ch_norm       = ch_gatk_vcf | NORM
+
+    // BARREIRA BLOCO 3
+    def block3_done = ch_norm.collect().map { true }
 
     /*
-     * SNPEFF também depende do BWA (como declarado)
+     * ========================================================
+     * BLOCO 4 — ANNOTATION + COHORT
+     * ========================================================
      */
-    def ch_snpeff = SNPEFF(ch_bwa)
 
-    /*
-     * BLOCK 4 (biosample puro)
-     */
+    def ch_snpeff     = SNPEFF(ch_bwa)
+
     def ch_biosample_only = ch_samples.map { it[0] }
 
-    def ch_tbdr   = ch_biosample_only | TBDR_RCOV
-    def ch_ntm    = ch_biosample_only | NTM_FILTER
-    def ch_line   = ch_biosample_only | LINEAGE
+    def ch_tbdr       = ch_biosample_only | TBDR_RCOV
+    def ch_ntm        = ch_biosample_only | NTM_FILTER
+    def ch_lineage    = ch_biosample_only | LINEAGE
 
-    /*
-     * COHORT (fan-in)
-     */
-    def ch_cohort     = Channel.value(true) | COHORT
+    def ch_cohort     = block3_done | COHORT
     def ch_cohort_f   = ch_cohort | COHORT_FILTER
 
+    // BARREIRA BLOCO 4
+    def block4_done = ch_cohort_f.map { true }
+
     /*
-     * BLOCK 5
+     * ========================================================
+     * BLOCO 5 — PHYLOGENY
+     * ========================================================
      */
-    def ch_snp_matrix = Channel.value(true) | SNP_MATRIX
+
+    def ch_snp_matrix = block4_done | SNP_MATRIX
+
     def ch_trans      = ch_snp_matrix | TRANSMISSION
     def ch_iqtree     = ch_snp_matrix | IQTREE
 
-    /*
-     * BLOCK 6
-     */
-    def ch_mix   = ch_biosample_only | MIXINFECTION
-    def ch_targ  = ch_biosample_only | RESISTANCE_TARGET
-    def ch_rep   = ch_targ | RESISTANCE_REPORT
+    // BARREIRA BLOCO 5
+    def block5_done = ch_snp_matrix.map { true }
 
     /*
-     * BLOCK 7
+     * ========================================================
+     * BLOCO 6 — RESISTANCE
+     * ========================================================
      */
-    def ch_res_sum = Channel.value(true) | RESISTANCE_SUMMARY
+
+    def ch_mix   = block5_done
+        .combine(ch_biosample_only)
+        .map { it[1] }
+        | MIXINFECTION
+
+    def ch_target = block5_done
+        .combine(ch_biosample_only)
+        .map { it[1] }
+        | RESISTANCE_TARGET
+
+    def ch_report = ch_target | RESISTANCE_REPORT
+
+    // BARREIRA BLOCO 6
+    def block6_done = ch_report.collect().map { true }
+
+    /*
+     * ========================================================
+     * BLOCO 7 — SUMMARY
+     * ========================================================
+     */
+
+    def ch_res_sum = block6_done | RESISTANCE_SUMMARY
     def ch_qc_sum  = ch_res_sum | QC_SUMMARY
 
-    /*
-     * BLOCK 8
-     */
-    def ch_clinical = ch_biosample_only | CLINICAL_REPORT
-}
+    // BARREIRA BLOCO 7
+    def block7_done = ch_qc_sum.map { true }
 
+    /*
+     * ========================================================
+     * BLOCO 8 — CLINICAL REPORT
+     * ========================================================
+     */
+
+    def ch_clinical = block7_done
+        .combine(ch_biosample_only)
+        .map { it[1] }
+        | CLINICAL_REPORT
+}
