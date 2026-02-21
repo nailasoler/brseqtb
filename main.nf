@@ -748,10 +748,11 @@ workflow {
      * ========================================================
      */
 
-    // 🔧 FIX AQUI — DELLY agora recebe 2 canais
-    def ch_delly = ch_biosamples
-        .combine(ch_block2_done)
-        | DELLY
+    
+    def ch_delly = DELLY(
+        ch_biosamples,
+        ch_block2_done
+    )
 
     def ch_lofreq     = ch_biosamples | LOFREQ
     def ch_gatk_gvcf  = ch_biosamples | GATK_GVCF
