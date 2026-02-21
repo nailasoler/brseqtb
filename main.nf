@@ -702,7 +702,6 @@ workflow {
 
     def ch_init = Channel.value(true)
 
-    ch_init = MICROMAMBA_SETUP(ch_init)
     ch_init = KAIJU_DB(ch_init)
     ch_init = OMS_CATALOG(ch_init)
     ch_init = BWA_REF(ch_init)
