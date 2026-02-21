@@ -733,12 +733,12 @@ workflow {
      * ========================================================
      */
 
-    ch_biosamples | FASTQC
+    FASTQC(ch_biosamples)
 
-    def ch_trim = ch_biosamples | TRIMMOMATIC
+    def ch_trim = TRIMMOMATIC(ch_biosamples)
 
-    def ch_bwa   = ch_trim | BWA
-    def ch_kaiju = ch_trim | KAIJU
+    def ch_bwa   = BWA(ch_trim)
+    def ch_kaiju = KAIJU(ch_trim)
 
     def ch_block2_done = ch_trim.collect().map { true }
 
@@ -748,17 +748,30 @@ workflow {
      * ========================================================
      */
 
-    
     def ch_delly = DELLY(
         ch_biosamples,
         ch_block2_done
     )
 
-    def ch_lofreq     = ch_biosamples | LOFREQ
-    def ch_gatk_gvcf  = ch_biosamples | GATK_GVCF
-    def ch_gatk_vcf   = ch_biosamples | GATK_VCF
+    def ch_lofreq = LOFREQ(
+        ch_biosamples,
+        ch_block2_done
+    )
 
-    def ch_norm       = ch_biosamples | NORM
+    def ch_gatk_gvcf = GATK_GVCF(
+        ch_biosamples,
+        ch_block2_done
+    )
+
+    def ch_gatk_vcf = GATK_VCF(
+        ch_biosamples,
+        ch_block2_done
+    )
+
+    def ch_norm = NORM(
+        ch_biosamples,
+        ch_block2_done
+    )
 
     def ch_block3_done = ch_norm.collect().map { true }
 
@@ -768,15 +781,30 @@ workflow {
      * ========================================================
      */
 
-    def ch_snpeff     = ch_biosamples | SNPEFF
-    def ch_tbdr_rcov  = ch_biosamples | TBDR_RCOV
-    def ch_ntm_filter = ch_biosamples | NTM_FILTER
-    def ch_lineage    = ch_biosamples | LINEAGE
+    def ch_snpeff = SNPEFF(
+        ch_biosamples,
+        ch_block3_done
+    )
+
+    def ch_tbdr_rcov = TBDR_RCOV(
+        ch_biosamples,
+        ch_block3_done
+    )
+
+    def ch_ntm_filter = NTM_FILTER(
+        ch_biosamples,
+        ch_block3_done
+    )
+
+    def ch_lineage = LINEAGE(
+        ch_biosamples,
+        ch_block3_done
+    )
 
     def ch_block4_samples_done = ch_biosamples.collect().map { true }
 
-    def ch_cohort = ch_block4_samples_done | COHORT
-    def ch_cohort_filtered = ch_cohort | COHORT_FILTER
+    def ch_cohort = COHORT(ch_block4_samples_done)
+    def ch_cohort_filtered = COHORT_FILTER(ch_cohort)
 
     def ch_block4_done = ch_cohort_filtered.map { true }
 
@@ -786,10 +814,10 @@ workflow {
      * ========================================================
      */
 
-    def ch_snp_matrix = ch_block4_done | SNP_MATRIX
+    def ch_snp_matrix = SNP_MATRIX(ch_block4_done)
 
-    def ch_transmission = ch_snp_matrix | TRANSMISSION
-    def ch_iqtree       = ch_snp_matrix | IQTREE
+    def ch_transmission = TRANSMISSION(ch_snp_matrix)
+    def ch_iqtree       = IQTREE(ch_snp_matrix)
 
     def ch_block5_done = ch_snp_matrix.map { true }
 
@@ -799,18 +827,17 @@ workflow {
      * ========================================================
      */
 
-    def ch_mixinfection = ch_biosamples
-        .combine(ch_block5_done)
-        .map { it[0] }
-        | MIXINFECTION
+    def ch_mixinfection = MIXINFECTION(
+        ch_biosamples,
+        ch_block5_done
+    )
 
-    def ch_resistance_target = ch_biosamples
-        .combine(ch_block5_done)
-        .map { it[0] }
-        | RESISTANCE_TARGET
+    def ch_resistance_target = RESISTANCE_TARGET(
+        ch_biosamples,
+        ch_block5_done
+    )
 
-    def ch_resistance_report = ch_resistance_target
-        | RESISTANCE_REPORT
+    def ch_resistance_report = RESISTANCE_REPORT(ch_resistance_target)
 
     def ch_block6_done = ch_resistance_report.collect().map { true }
 
@@ -820,8 +847,8 @@ workflow {
      * ========================================================
      */
 
-    def ch_resistance_summary = ch_block6_done | RESISTANCE_SUMMARY
-    def ch_qc_summary         = ch_resistance_summary | QC_SUMMARY
+    def ch_resistance_summary = RESISTANCE_SUMMARY(ch_block6_done)
+    def ch_qc_summary         = QC_SUMMARY(ch_resistance_summary)
 
     def ch_block7_done = ch_qc_summary.map { true }
 
@@ -831,13 +858,14 @@ workflow {
      * ========================================================
      */
 
-    def ch_clinical_report = ch_biosamples
-        .combine(ch_block7_done)
-        .map { it[0] }
-        | CLINICAL_REPORT
+    def ch_clinical_report = CLINICAL_REPORT(
+        ch_biosamples,
+        ch_block7_done
+    )
 
     def ch_block8_done = ch_clinical_report.collect().map { true }
 
 }
+
 
 
