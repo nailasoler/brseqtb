@@ -55,7 +55,6 @@ RAW_BCF="${OUTPUT_DIR}/${BIOSAMPLE}_delly.bcf"
 # ==================== RUN DELLY ====================
 delly call \
     -g "$REF" \
-    -t "$THREADS" \
     -o "$RAW_BCF" \
     "$BAM_FILE" \
     2>&1 | tee "$LOG_FILE"
