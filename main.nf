@@ -748,7 +748,12 @@ workflow {
      * ========================================================
      */
 
-    def ch_delly      = ch_biosamples | DELLY
+    // 🔧 FIX AQUI — DELLY agora recebe 2 canais
+    def ch_delly = ch_biosamples
+        .combine(ch_block2_done)
+        .map { it[0] }
+        | DELLY
+
     def ch_lofreq     = ch_biosamples | LOFREQ
     def ch_gatk_gvcf  = ch_biosamples | GATK_GVCF
     def ch_gatk_vcf   = ch_biosamples | GATK_VCF
@@ -834,3 +839,4 @@ workflow {
     def ch_block8_done = ch_clinical_report.collect().map { true }
 
 }
+
