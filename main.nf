@@ -751,7 +751,6 @@ workflow {
     // 🔧 FIX AQUI — DELLY agora recebe 2 canais
     def ch_delly = ch_biosamples
         .combine(ch_block2_done)
-        .map { it[0] }
         | DELLY
 
     def ch_lofreq     = ch_biosamples | LOFREQ
