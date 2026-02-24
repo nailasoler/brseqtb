@@ -730,27 +730,19 @@ workflow {
 
     def ch_kaiju = ch_trim | KAIJU
 
-    // 🔒 BLOCO 2 termina quando TODOS os processos terminarem
+    def fastqc_done = ch_fastqc.collect()
+    def trim_done   = ch_trim.collect()
+    def bwa_done    = ch_bwa_tuple.collect()
+    def kaiju_done  = ch_kaiju.collect()
 
-    def fastqc_done = ch_fastqc.collect().map { true }
-    def trim_done   = ch_trim.collect().map { true }
-    def bwa_done    = ch_bwa_tuple.collect().map { true }
-    def kaiju_done  = ch_kaiju.collect().map { true }
-
-    def block2_done = fastqc_done
-        .combine(trim_done)
-        .combine(bwa_done)
-        .combine(kaiju_done)
+    def block2_done = Channel
+        .combine(fastqc_done, trim_done, bwa_done, kaiju_done)
         .map { true }
 
     /*
     * ========================================================
     * BLOCO 3 — VARIANT CALLING
     * ========================================================
-    */
-
-    /*
-    * Processos paralelos por biosample
     */
 
     def ch_delly      = DELLY(ch_bwa_tuple, ch_bwa_summary)
@@ -763,72 +755,43 @@ workflow {
 
     def ch_norm       = NORM(ch_gatk_dir, ch_gatk_vcf)
 
+    def delly_done   = ch_delly.collect()
+    def lofreq_done  = ch_lofreq.collect()
+    def gvcf_done    = ch_gatk_gvcf.collect()
+    def gatk_done    = ch_gatk_vcf.collect()
+    def norm_done    = ch_norm.collect()
 
-    /*
-    * 🔒 BARREIRA REAL DO BLOCO 3
-    * O bloco só termina quando TODOS os processos acima terminarem
-    */
-
-    def delly_done   = ch_delly.collect().map { true }
-    def lofreq_done  = ch_lofreq.collect().map { true }
-    def gvcf_done    = ch_gatk_gvcf.collect().map { true }
-    def gatk_done    = ch_gatk_vcf.collect().map { true }
-    def norm_done    = ch_norm.collect().map { true }
-
-    def block3_done = delly_done
-        .combine(lofreq_done)
-        .combine(gvcf_done)
-        .combine(gatk_done)
-        .combine(norm_done)
+    def block3_done = Channel
+        .combine(delly_done, lofreq_done, gvcf_done, gatk_done, norm_done)
         .map { true }
+
     /*
     * ========================================================
     * BLOCO 4 — ANNOTATION + COHORT
     * ========================================================
     */
 
-    /*
-    * Todos os processos do bloco 4 só começam
-    * após o BLOCO 3 terminar completamente
-    */
-
     def ch_block4_samples = block3_done
         .combine(ch_biosample_only)
         .map { it[1] }
-
-    /*
-    * Processos paralelos por biosample
-    */
 
     def ch_snpeff  = ch_block4_samples | SNPEFF
     def ch_tbdr    = ch_block4_samples | TBDR_RCOV
     def ch_ntm     = ch_block4_samples | NTM_FILTER
     def ch_lineage = ch_block4_samples | LINEAGE
 
-    /*
-    * COHORT roda uma vez após BLOCO 3
-    */
-
     def ch_cohort   = block3_done | COHORT
     def ch_cohort_f = ch_cohort | COHORT_FILTER
 
-    /*
-    * 🔒 BLOCO 4 termina quando TODOS terminarem
-    */
+    def snpeff_done = ch_snpeff.collect()
+    def tbdr_done   = ch_tbdr.collect()
+    def ntm_done    = ch_ntm.collect()
+    def lineage_done= ch_lineage.collect()
+    def cohort_done = ch_cohort.collect()
+    def cohortf_done= ch_cohort_f.collect()
 
-    def snpeff_done = ch_snpeff.collect().map { true }
-    def tbdr_done   = ch_tbdr.collect().map { true }
-    def ntm_done    = ch_ntm.collect().map { true }
-    def lineage_done= ch_lineage.collect().map { true }
-    def cohort_done = ch_cohort.collect().map { true }
-    def cohortf_done= ch_cohort_f.collect().map { true }
-
-    def block4_done = snpeff_done
-        .combine(tbdr_done)
-        .combine(ntm_done)
-        .combine(lineage_done)
-        .combine(cohort_done)
-        .combine(cohortf_done)
+    def block4_done = Channel
+        .combine(snpeff_done, tbdr_done, ntm_done, lineage_done, cohort_done, cohortf_done)
         .map { true }
 
     /*
@@ -841,15 +804,12 @@ workflow {
     def ch_trans      = ch_snp_matrix | TRANSMISSION
     def ch_iqtree     = ch_snp_matrix | IQTREE
 
-    // 🔒 BLOCO 5 termina quando TODOS terminarem
+    def snpm_done   = ch_snp_matrix.collect()
+    def trans_done  = ch_trans.collect()
+    def iqtree_done = ch_iqtree.collect()
 
-    def snpm_done    = ch_snp_matrix.collect().map { true }
-    def trans_done   = ch_trans.collect().map { true }
-    def iqtree_done  = ch_iqtree.collect().map { true }
-
-    def block5_done = snpm_done
-        .combine(trans_done)
-        .combine(iqtree_done)
+    def block5_done = Channel
+        .combine(snpm_done, trans_done, iqtree_done)
         .map { true }
 
     /*
@@ -866,15 +826,12 @@ workflow {
     def ch_target = ch_block6_samples | RESISTANCE_TARGET
     def ch_report = ch_target | RESISTANCE_REPORT
 
-    // 🔒 BLOCO 6 termina quando TODOS terminarem
+    def mix_done    = ch_mix.collect()
+    def target_done = ch_target.collect()
+    def report_done = ch_report.collect()
 
-    def mix_done    = ch_mix.collect().map { true }
-    def target_done = ch_target.collect().map { true }
-    def report_done = ch_report.collect().map { true }
-
-    def block6_done = mix_done
-        .combine(target_done)
-        .combine(report_done)
+    def block6_done = Channel
+        .combine(mix_done, target_done, report_done)
         .map { true }
 
     /*
@@ -886,15 +843,12 @@ workflow {
     def ch_res_sum = block6_done | RESISTANCE_SUMMARY
     def ch_qc_sum  = ch_res_sum | QC_SUMMARY
 
-    // 🔒 BLOCO 7 termina quando AMBOS terminarem
+    def ressum_done = ch_res_sum.collect()
+    def qc_done     = ch_qc_sum.collect()
 
-    def ressum_done = ch_res_sum.collect().map { true }
-    def qc_done     = ch_qc_sum.collect().map { true }
-
-    def block7_done = ressum_done
-        .combine(qc_done)
+    def block7_done = Channel
+        .combine(ressum_done, qc_done)
         .map { true }
-
 
     /*
     * ========================================================
