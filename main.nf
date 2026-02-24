@@ -691,126 +691,130 @@ workflow {
 
     /*
      * ========================================================
-     * BLOCO 1 — INIT (RODA UMA VEZ, CADEIA OBRIGATÓRIA)
+     * BLOCO 1 — INIT
      * ========================================================
      */
 
     init_token = Channel.value(true)
 
-    kaiju_done  = KAIJU_DB(init_token)
-    oms_done    = OMS_CATALOG(kaiju_done)
-    bwa_done    = BWA_REF(oms_done)
-    dict_done   = GATK_DICT(bwa_done)
-    snpeff_done = SNPEFF_DB(dict_done)
+    ch_kaiju   = KAIJU_DB(init_token)
+    ch_oms     = OMS_CATALOG(ch_kaiju)
+    ch_bwaref  = BWA_REF(ch_oms)
+    ch_dict    = GATK_DICT(ch_bwaref)
+    ch_snpeff  = SNPEFF_DB(ch_dict)
 
-    manifest_file = MAKE_MANIFEST_VALIDATE(
-        snpeff_done,
+    ch_manifest = MAKE_MANIFEST_VALIDATE(
+        ch_snpeff,
         file("${projectDir}/input/input_table.xlsx"),
         file("${projectDir}/reads")
     )
 
-    // BARREIRA BLOCO 1
-    block1_done = manifest_file
-        .collect()
-        .map { true }
+    // BLOCO 1 TERMINA AQUI
+    block1_done = ch_manifest.collect()
 
     /*
      * ========================================================
-     * BLOCO 2 — PREPROCESS (FAN-OUT POR BIOSAMPLE)
-     * Só inicia após BLOCO 1 COMPLETO
+     * BLOCO 2 — PREPROCESS
      * ========================================================
      */
 
-    biosamples_ch = manifest_file
-        .splitCsv(header: true, sep: '\t')
+    biosamples = ch_manifest
+        .splitCsv(header:true, sep:'\t')
         .map { row -> row.biosample }
 
-    biosamples_ready = biosamples_ch
+    bios_ready = biosamples
         .combine(block1_done)
-        .map { biosample, _ -> tuple(biosample, true) }
+        .map { id, _ -> tuple(id, true) }
 
-    fastqc_out = FASTQC(biosamples_ready)
+    ch_fastqc  = FASTQC(bios_ready)
+    ch_trim    = TRIMMOMATIC(bios_ready)
 
-    trim_out = TRIMMOMATIC(biosamples_ready)
+    bwa_input = ch_trim.map { id, trim_dir ->
+        tuple(id, trim_dir)
+    }
 
-    bwa_out = trim_out
-        .map { biosample, trim_dir -> tuple(biosample, trim_dir) }
-        | BWA
+    def (ch_bwa_tuple, ch_bwa_summary) = BWA(bwa_input)
 
-    kaiju_out = trim_out
-        .map { biosample, trim_dir -> tuple(biosample, trim_dir) }
-        | KAIJU
+    kaiju_input = ch_trim.map { id, trim_dir ->
+        tuple(id, trim_dir)
+    }
 
-    // BARREIRA BLOCO 2 (espera TODOS)
-    block2_done = fastqc_out
-        .mix(trim_out)
-        .mix(bwa_out)
-        .mix(kaiju_out)
+    def (ch_kaiju_dir, ch_kaiju_summary) = KAIJU(kaiju_input)
+
+    // BLOCO 2 TERMINA AQUI (TODOS OUTPUTS)
+    block2_done = ch_fastqc
+        .mix(ch_trim)
+        .mix(ch_bwa_tuple)
+        .mix(ch_bwa_summary)
+        .mix(ch_kaiju_dir)
+        .mix(ch_kaiju_summary)
         .collect()
-        .map { true }
 
     /*
      * ========================================================
      * BLOCO 3 — VARIANT CALLING
-     * Só inicia após BLOCO 2 COMPLETO
      * ========================================================
      */
 
-    bwa_ready = bwa_out
+    bwa_ready = ch_bwa_tuple
         .combine(block2_done)
-        .map { tuple_data, _ ->
-            def (biosample, bwa_dir) = tuple_data
-            tuple(biosample, bwa_dir)
-        }
+        .map { tuple_data, _ -> tuple_data }
 
-    delly_out      = bwa_ready | DELLY
-    lofreq_out     = bwa_ready | LOFREQ
-    gatk_gvcf_out  = bwa_ready | GATK_GVCF
-    gatk_vcf_out   = bwa_ready | GATK_VCF
+    def (ch_delly_dir, ch_delly_vcf) = DELLY(
+        bwa_ready.combine(ch_bwa_summary)
+    )
 
-    norm_out = gatk_vcf_out
-        .map { tuple_data ->
-            def (biosample, gatk_dir) = tuple_data
-            tuple(biosample, gatk_dir)
-        }
-        | NORM
+    def (ch_lofreq_dir, ch_lofreq_vcf) = LOFREQ(
+        bwa_ready.combine(ch_bwa_summary)
+    )
 
-    // BARREIRA BLOCO 3 (espera TODOS)
-    block3_done = delly_out
-        .mix(lofreq_out)
-        .mix(gatk_gvcf_out)
-        .mix(gatk_vcf_out)
-        .mix(norm_out)
+    def (ch_gatk_dir_gvcf, ch_gatk_gvcf) = GATK_GVCF(
+        bwa_ready.combine(ch_bwa_summary)
+    )
+
+    def (ch_gatk_dir_vcf, ch_gatk_vcf) = GATK_VCF(
+        bwa_ready.combine(ch_bwa_summary)
+    )
+
+    ch_norm = NORM(
+        ch_gatk_dir_vcf.combine(ch_gatk_vcf)
+    )
+
+    // BLOCO 3 TERMINA AQUI (TODOS OUTPUTS)
+    block3_done = ch_delly_dir
+        .mix(ch_delly_vcf)
+        .mix(ch_lofreq_dir)
+        .mix(ch_lofreq_vcf)
+        .mix(ch_gatk_dir_gvcf)
+        .mix(ch_gatk_gvcf)
+        .mix(ch_gatk_dir_vcf)
+        .mix(ch_gatk_vcf)
+        .mix(ch_norm)
         .collect()
-        .map { true }
 
     /*
      * ========================================================
      * BLOCO 4 — ANNOTATION + COHORT
-     * Só inicia após BLOCO 3 COMPLETO
      * ========================================================
      */
 
-    biosamples_block4 = biosamples_ch
+    bios_block4 = biosamples
         .combine(block3_done)
-        .map { biosample, _ -> biosample }
+        .map { id, _ -> id }
 
-    snpeff_out  = biosamples_block4 | SNPEFF
-    tbdr_out    = biosamples_block4 | TBDR_RCOV
-    ntm_out     = biosamples_block4 | NTM_FILTER
-    lineage_out = biosamples_block4 | LINEAGE
+    ch_snpeff2 = SNPEFF(bios_block4)
+    ch_tbdr    = TBDR_RCOV(bios_block4)
+    ch_ntm     = NTM_FILTER(bios_block4)
+    ch_lineage = LINEAGE(bios_block4)
 
-    // BARREIRA PER-SAMPLE BLOCO 4
-    block4_samples_done = snpeff_out
-        .mix(tbdr_out)
-        .mix(ntm_out)
-        .mix(lineage_out)
+    block4_samples_done = ch_snpeff2
+        .mix(ch_tbdr)
+        .mix(ch_ntm)
+        .mix(ch_lineage)
         .collect()
-        .map { true }
 
-    // COORTE — roda UMA vez
-    cohort_out = block4_samples_done | COHORT
+    ch_cohort = COHORT(block4_samples_done)
 
-    // COHORT FILTER — após COHORT
-    cohort_filter_out = cohort_out | COHORT_FILTER
+    ch_cohort_filtered = COHORT_FILTER(ch_cohort)
+
 }
