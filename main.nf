@@ -757,32 +757,34 @@ workflow {
     * ========================================================
     */
 
-    // 🔒 Liberar biosamples SOMENTE após bloco 3 terminar
-    def ch_block4_samples = block3_done
-        .combine(ch_biosample_only)
-        .map { it[1] }
+    // Liberar biosamples SOMENTE após bloco 3 terminar
+    def ch_block4_samples = ch_biosample_only
+        .combine(block3_done)
+        .map { it[0] }
 
-    // 🔒 SNPEFF também bloqueado pelo bloco 3
-    def ch_block4_bwa_tuple = block3_done
-        .combine(ch_bwa_tuple)
-        .map { it[1] }
+    // Preservar tuple(biosample, bwa_dir)
+    def ch_block4_bwa_tuple = ch_bwa_tuple
+        .combine(block3_done)
+        .map { it[0] }
 
-    def ch_block4_bwa_summary = block3_done
-        .combine(ch_bwa_summary)
-        .map { it[1] }
+    // Preservar bwa_summary
+    def ch_block4_bwa_summary = ch_bwa_summary
+        .combine(block3_done)
+        .map { it[0] }
 
-    def ch_snpeff  = SNPEFF(ch_block4_bwa_tuple, ch_block4_bwa_summary)
+    // SNPEFF agora recebe exatamente os dois canais corretos
+    def ch_snpeff = SNPEFF(ch_block4_bwa_tuple, ch_block4_bwa_summary)
 
-    // Processos por biosample
+    // Processos por biosample (agora realmente bloqueados)
     def ch_tbdr    = ch_block4_samples | TBDR_RCOV
     def ch_ntm     = ch_block4_samples | NTM_FILTER
     def ch_lineage = ch_block4_samples | LINEAGE
 
-    // COHORT roda apenas após bloco 3
+    // COHORT roda apenas após bloco 3 terminar
     def ch_cohort   = block3_done | COHORT
     def ch_cohort_f = ch_cohort | COHORT_FILTER
 
-    // 🔒 BLOCO 4 termina apenas após cohortFilter
+    // BLOCO 4 termina apenas após cohortFilter
     def block4_done = ch_cohort_f.map { true }
 
     /*
