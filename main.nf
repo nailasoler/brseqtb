@@ -713,30 +713,46 @@ workflow {
 
 
     /*
-     * ========================================================
-     * BLOCO 2 — SEQUENCIAL POR BIOSAMPLE
-     * fastqc → trimmomatic → kaiju → bwa
-     * ========================================================
-     */
+    * ========================================================
+    * BLOCO 2 — SEQUENCIAL POR BIOSAMPLE
+    * fastqc → trimmomatic → kaiju → bwa
+    * ========================================================
+    */
 
     biosamples = manifest_file
         .splitCsv(header:true, sep:'\t')
         .map { row -> row.biosample }
 
-    bios_block2 = biosamples
+    bios_ready = biosamples
         .combine(block1_done)
         .map { id, _ -> tuple(id, true) }
 
-    fastqc_out = FASTQC(bios_block2)
+    fastqc_out = FASTQC(bios_ready)
 
-    trim_out = TRIMMOMATIC(fastqc_out)
+    trim_out = TRIMMOMATIC(bios_ready)
 
-    kaiju_out = KAIJU(trim_out)
+    /*
+    * KAIJU depende do trim_dir
+    */
+    kaiju_input = trim_out.map { id, trim_dir ->
+        tuple(id, trim_dir)
+    }
 
-    bwa_out = BWA(kaiju_out)
+    (kaiju_dir, kaiju_summary) = KAIJU(kaiju_input)
 
-    block2_done = bwa_out.collect()
+    /*
+    * BWA depende do trim_dir também
+    */
+    bwa_input = trim_out.map { id, trim_dir ->
+        tuple(id, trim_dir)
+    }
 
+    (bwa_tuple, bwa_summary) = BWA(bwa_input)
+
+    /*
+    * Barreira do bloco 2
+    */
+    block2_done = bwa_tuple.collect()
 
     /*
      * ========================================================
