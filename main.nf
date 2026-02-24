@@ -714,20 +714,22 @@ workflow {
 
     // ===== BLOCO 2 =====
 
-    bwa_input_block2 = ch_trim.map { id, trim_dir ->
+    bwa_input_block2 = trim_out.map { id, trim_dir ->
         tuple(id, trim_dir)
     }
 
-    (ch_bwa_tuple_block2, ch_bwa_summary_block2) = BWA(bwa_input_block2)
+    (ch_bwa_tuple_block2, ch_bwa_summary_block2) =
+        BWA(bwa_input_block2)
 
-    kaiju_input_block2 = ch_trim.map { id, trim_dir ->
+    kaiju_input_block2 = trim_out.map { id, trim_dir ->
         tuple(id, trim_dir)
     }
 
-    (ch_kaiju_dir_block2, ch_kaiju_summary_block2) = KAIJU(kaiju_input_block2)
+    (ch_kaiju_dir_block2, ch_kaiju_summary_block2) =
+        KAIJU(kaiju_input_block2)
 
-    block2_done = ch_fastqc
-        .mix(ch_trim)
+    block2_done = fastqc_out
+        .mix(trim_out)
         .mix(ch_bwa_tuple_block2)
         .mix(ch_bwa_summary_block2)
         .mix(ch_kaiju_dir_block2)
