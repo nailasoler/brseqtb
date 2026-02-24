@@ -754,20 +754,18 @@ workflow {
 
         /*
      * ========================================================
-     * BLOCO 3 — VARIANT CALLING (FAN-OUT POR BIOSAMPLE)
+     * BLOCO 3 — VARIANT CALLING
      * Só inicia após FINALIZAÇÃO COMPLETA do BLOCO 2
      * ========================================================
      */
 
-    // Gatilho global: tudo do bloco 2 precisa ter finalizado
-    block2_done = bwa_out
-        .collect()
-        .combine(kaiju_out.collect())
-        .map { true }
+    // Aguarda FINALIZAÇÃO TOTAL do bloco 2
+    bwa_done_all   = bwa_out.collect()
+    kaiju_done_all = kaiju_out.collect()
 
-    biosamples_block3 = biosamples_ch
-        .combine(block2_done)
-        .map { biosample, _ -> biosample }
+    block2_done = bwa_done_all
+        .combine(kaiju_done_all)
+        .map { true }
 
     /*
      * DELLY — paraleliza por biosample
@@ -820,15 +818,12 @@ workflow {
     /*
      * NORM — obrigatoriamente após GATK_VCF
      */
-    norm_in = gatk_vcf_out
-        .combine(block2_done)
-        .map { tuple_data, _ ->
-            def (biosample, gatk_dir) = tuple_data
-            tuple(biosample, gatk_dir)
-        }
+    norm_in = gatk_vcf_out.map { tuple_data ->
+        def (biosample, gatk_dir) = tuple_data
+        tuple(biosample, gatk_dir)
+    }
 
     norm_out = NORM(norm_in)
-
 
     /*
      * ========================================================
@@ -837,12 +832,18 @@ workflow {
      * ========================================================
      */
 
-    block3_done = delly_out
-        .collect()
-        .combine(lofreq_out.collect())
-        .combine(gatk_gvcf_out.collect())
-        .combine(gatk_vcf_out.collect())
-        .combine(norm_out.collect())
+    // Aguarda FINALIZAÇÃO TOTAL do bloco 3
+    delly_done_all    = delly_out.collect()
+    lofreq_done_all   = lofreq_out.collect()
+    gvcf_done_all     = gatk_gvcf_out.collect()
+    vcf_done_all      = gatk_vcf_out.collect()
+    norm_done_all     = norm_out.collect()
+
+    block3_done = delly_done_all
+        .combine(lofreq_done_all)
+        .combine(gvcf_done_all)
+        .combine(vcf_done_all)
+        .combine(norm_done_all)
         .map { true }
 
     biosamples_block4 = biosamples_ch
@@ -850,33 +851,37 @@ workflow {
         .map { biosample, _ -> biosample }
 
     /*
-     * SNPEFF — paraleliza por biosample
+     * SNPEFF
      */
     snpeff_out = SNPEFF(biosamples_block4)
 
     /*
-     * TBDR_RCOV — paraleliza por biosample
+     * TBDR_RCOV
      */
     tbdr_out = TBDR_RCOV(biosamples_block4)
 
     /*
-     * NTM_FILTER — paraleliza por biosample
+     * NTM_FILTER
      */
     ntm_out = NTM_FILTER(biosamples_block4)
 
     /*
-     * LINEAGE — paraleliza por biosample
+     * LINEAGE
      */
     lineage_out = LINEAGE(biosamples_block4)
 
     /*
-     * COHORT — roda uma vez (fan-in), após todos biosamples do bloco 4
+     * COHORT — roda uma vez após TODOS biosamples do bloco 4
      */
-    cohort_trigger = snpeff_out
-        .collect()
-        .combine(tbdr_out.collect())
-        .combine(ntm_out.collect())
-        .combine(lineage_out.collect())
+    snpeff_done_all  = snpeff_out.collect()
+    tbdr_done_all    = tbdr_out.collect()
+    ntm_done_all     = ntm_out.collect()
+    lineage_done_all = lineage_out.collect()
+
+    cohort_trigger = snpeff_done_all
+        .combine(tbdr_done_all)
+        .combine(ntm_done_all)
+        .combine(lineage_done_all)
         .combine(block3_done)
         .map { true }
 
