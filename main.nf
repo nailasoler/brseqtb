@@ -691,162 +691,65 @@ workflow {
 
     /*
      * ========================================================
-     * BLOCO 1 — INIT
+     * BLOCO 1 — INIT (RODA UMA VEZ, CADEIA OBRIGATÓRIA)
      * ========================================================
      */
 
-    def ch_init = Channel.value(true)
+    init_token = Channel.value(true)
 
-    ch_init = KAIJU_DB(ch_init)
-    ch_init = OMS_CATALOG(ch_init)
-    ch_init = BWA_REF(ch_init)
-    ch_init = GATK_DICT(ch_init)
-    ch_init = SNPEFF_DB(ch_init)
+    kaiju_done   = KAIJU_DB(init_token)
+    oms_done     = OMS_CATALOG(kaiju_done)
+    bwa_done     = BWA_REF(oms_done)
+    dict_done    = GATK_DICT(bwa_done)
+    snpeff_done  = SNPEFF_DB(dict_done)
 
-    def ch_manifest = MAKE_MANIFEST_VALIDATE(
-        ch_init,
+    manifest_file = MAKE_MANIFEST_VALIDATE(
+        snpeff_done,
         file("${projectDir}/input/input_table.xlsx"),
         file("${projectDir}/reads")
     )
 
-    def ch_samples = ch_manifest
-        .splitCsv(header:true, sep:'\t')
-        .map { row -> tuple(row.biosample, true) }
+    /*
+     * ========================================================
+     * BLOCO 2 — PREPROCESS (FAN-OUT POR BIOSAMPLE)
+     * Só inicia após FINALIZAÇÃO COMPLETA do BLOCO 1
+     * ========================================================
+     */
 
-    def ch_biosample_only = ch_samples.map { it[0] }
+    biosamples_ch = manifest_file
+        .splitCsv(header: true, sep: '\t')
+        .map { row -> row.biosample }
+
+    biosamples_ready = biosamples_ch
+        .combine(snpeff_done)
+        .map { biosample, _ -> tuple(biosample, true) }
 
     /*
-    * ========================================================
-    * BLOCO 2 — PREPROCESS
-    * ========================================================
-    */
-
-    def ch_fastqc = ch_samples | FASTQC
-    def ch_trim   = ch_samples | TRIMMOMATIC
-
-    def bwa_out = ch_trim | BWA
-    def ch_bwa_tuple   = bwa_out[0]
-    def ch_bwa_summary = bwa_out[1]
-
-    def ch_kaiju = ch_trim | KAIJU
-
-    def block2_done = ch_fastqc
-        .mix(ch_trim)
-        .mix(ch_bwa_tuple)
-        .mix(ch_kaiju)
-        .collect()
-        .map { true }
+     * FASTQC — paraleliza por biosample
+     */
+    fastqc_out = FASTQC(biosamples_ready)
 
     /*
-    * ========================================================
-    * BLOCO 3 — VARIANT CALLING
-    * ========================================================
-    */
-
-    def ch_delly      = DELLY(ch_bwa_tuple, ch_bwa_summary)
-    def ch_lofreq     = LOFREQ(ch_bwa_tuple, ch_bwa_summary)
-    def ch_gatk_gvcf  = GATK_GVCF(ch_bwa_tuple, ch_bwa_summary)
-
-    def gatk_vcf_out  = GATK_VCF(ch_bwa_tuple, ch_bwa_summary)
-    def ch_gatk_dir   = gatk_vcf_out[0]
-    def ch_gatk_vcf   = gatk_vcf_out[1]
-
-    def ch_norm       = NORM(ch_gatk_dir, ch_gatk_vcf)
-
-    def block3_done = ch_delly
-        .mix(ch_lofreq)
-        .mix(ch_gatk_gvcf)
-        .mix(ch_gatk_vcf)
-        .mix(ch_norm)
-        .collect()
-        .map { true }
+     * TRIMMOMATIC — paraleliza por biosample
+     */
+    trim_out = TRIMMOMATIC(biosamples_ready)
 
     /*
-    * ========================================================
-    * BLOCO 4 — ANNOTATION + COHORT
-    * ========================================================
-    */
+     * BWA — obrigatoriamente após TRIMMOMATIC
+     */
+    bwa_input = trim_out.map { biosample, trim_dir ->
+        tuple(biosample, trim_dir)
+    }
 
-    def ch_block4_samples = block3_done
-        .combine(ch_biosample_only)
-        .map { it[1] }
-
-    def ch_snpeff  = ch_block4_samples | SNPEFF
-    def ch_tbdr    = ch_block4_samples | TBDR_RCOV
-    def ch_ntm     = ch_block4_samples | NTM_FILTER
-    def ch_lineage = ch_block4_samples | LINEAGE
-
-    def ch_cohort   = block3_done | COHORT
-    def ch_cohort_f = ch_cohort | COHORT_FILTER
-
-    def block4_done = ch_snpeff
-        .mix(ch_tbdr)
-        .mix(ch_ntm)
-        .mix(ch_lineage)
-        .mix(ch_cohort)
-        .mix(ch_cohort_f)
-        .collect()
-        .map { true }
+    bwa_out = BWA(bwa_input)
 
     /*
-    * ========================================================
-    * BLOCO 5 — PHYLOGENY
-    * ========================================================
-    */
+     * KAIJU — obrigatoriamente após TRIMMOMATIC
+     */
+    kaiju_input = trim_out.map { biosample, trim_dir ->
+        tuple(biosample, trim_dir)
+    }
 
-    def ch_snp_matrix = block4_done | SNP_MATRIX
-    def ch_trans      = ch_snp_matrix | TRANSMISSION
-    def ch_iqtree     = ch_snp_matrix | IQTREE
+    kaiju_out = KAIJU(kaiju_input)
 
-    def block5_done = ch_snp_matrix
-        .mix(ch_trans)
-        .mix(ch_iqtree)
-        .collect()
-        .map { true }
-
-    /*
-    * ========================================================
-    * BLOCO 6 — RESISTANCE
-    * ========================================================
-    */
-
-    def ch_block6_samples = block5_done
-        .combine(ch_biosample_only)
-        .map { it[1] }
-
-    def ch_mix    = ch_block6_samples | MIXINFECTION
-    def ch_target = ch_block6_samples | RESISTANCE_TARGET
-    def ch_report = ch_target | RESISTANCE_REPORT
-
-    def block6_done = ch_mix
-        .mix(ch_target)
-        .mix(ch_report)
-        .collect()
-        .map { true }
-
-    /*
-    * ========================================================
-    * BLOCO 7 — SUMMARY
-    * ========================================================
-    */
-
-    def ch_res_sum = block6_done | RESISTANCE_SUMMARY
-    def ch_qc_sum  = ch_res_sum | QC_SUMMARY
-
-    def block7_done = ch_res_sum
-        .mix(ch_qc_sum)
-        .collect()
-        .map { true }
-
-    /*
-    * ========================================================
-    * BLOCO 8 — CLINICAL REPORT
-    * ========================================================
-    */
-
-    def ch_block8_samples = block7_done
-        .combine(ch_biosample_only)
-        .map { it[1] }
-
-    def ch_clinical = ch_block8_samples | CLINICAL_REPORT
 }
