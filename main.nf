@@ -907,3 +907,4 @@ workflow {
         .map { it[1] }
 
     def ch_clinical = ch_block8_samples | CLINICAL_REPORT
+}
