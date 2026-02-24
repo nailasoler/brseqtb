@@ -364,14 +364,14 @@ process NORM {
  * Block 4
  * ============================================================
  */
- 
+
 process SNPEFF {
+
     tag { biosample }
     cpus { params.snpeff_cpus }
 
     input:
-        tuple val(biosample), path(bwa_dir)
-        path bwa_summary
+        val biosample
 
     output:
         path "snpeff/${biosample}"
@@ -379,6 +379,7 @@ process SNPEFF {
     script:
     """
     bash ${projectDir}/bin/snpeff.sh "${biosample}"
+
     mkdir -p snpeff
     cp -r ${projectDir}/snpeff/${biosample} snpeff/
     """
@@ -748,69 +749,44 @@ workflow {
 
     def ch_norm = NORM(ch_gatk_dir, ch_gatk_vcf)
 
-    // 🔒 BLOCO 3 termina quando TODOS NORM terminam
+    // BLOCO 3 termina quando TODOS NORM terminam
     def block3_done = ch_norm.collect().map { true }
 
     /*
-     * ========================================================
-     * BLOCO 4 — ANNOTATION + COHORT
-     * ========================================================
-     */
+    * ========================================================
+    * BLOCO 4 — ANNOTATION + COHORT
+    * ========================================================
+    */
 
     /*
-     * 1️⃣ Primeiro: reconstruímos um canal estruturado único
-     *    contendo:
-     *    tuple(biosample, bwa_dir, bwa_summary)
-     */
-
-    def ch_bwa_struct = ch_bwa_tuple
-        .combine(ch_bwa_summary)
-        .map { tuple(it[0][0], it[0][1], it[1]) }
-
-    /*
-     * 2️⃣ Aplicamos o bloqueio do BLOCO 3 UMA ÚNICA VEZ
-     *    preservando a estrutura
-     */
-
-    def ch_bwa_struct_blocked = ch_bwa_struct
-        .combine(block3_done)
-        .map { it[0] }
-
-    /*
-     * 3️⃣ Agora alimentamos o SNPEFF corretamente
-     *    Ele espera:
-     *      tuple(biosample, bwa_dir)
-     *      path bwa_summary
-     */
-
-    def ch_snpeff = SNPEFF(
-        ch_bwa_struct_blocked.map { tuple(it[0], it[1]) },
-        ch_bwa_struct_blocked.map { it[2] }
-    )
-
-    /*
-     * 4️⃣ Processos que dependem apenas de biosample
-     *    também precisam esperar BLOCO 3 terminar
-     */
+    * Todos os processos do bloco 4 só começam
+    * após o BLOCO 3 terminar completamente
+    */
 
     def ch_block4_samples = block3_done
         .combine(ch_biosample_only)
         .map { it[1] }
+
+    /*
+    * SNPEFF agora usa apenas biosample
+    */
+
+    def ch_snpeff  = ch_block4_samples | SNPEFF
 
     def ch_tbdr    = ch_block4_samples | TBDR_RCOV
     def ch_ntm     = ch_block4_samples | NTM_FILTER
     def ch_lineage = ch_block4_samples | LINEAGE
 
     /*
-     * 5️⃣ COHORT depende do BLOCO 3 completo
-     */
+    * COHORT roda uma vez após BLOCO 3
+    */
 
     def ch_cohort   = block3_done | COHORT
     def ch_cohort_f = ch_cohort | COHORT_FILTER
 
     /*
-     * 🔒 BLOCO 4 termina aqui
-     */
+    * BLOCO 4 termina aqui
+    */
 
     def block4_done = ch_cohort_f.map { true }
 
