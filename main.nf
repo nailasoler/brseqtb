@@ -712,12 +712,13 @@ workflow {
     block1_done = manifest_file.collect()
 
 
+
     /*
-    * ========================================================
-    * BLOCO 2 — SEQUENCIAL POR BIOSAMPLE
-    * fastqc → trimmomatic → kaiju → bwa
-    * ========================================================
-    */
+     * ========================================================
+     * BLOCO 2 — SEQUENCIAL POR BIOSAMPLE
+     * fastqc → trimmomatic → kaiju → bwa
+     * ========================================================
+     */
 
     biosamples = manifest_file
         .splitCsv(header:true, sep:'\t')
@@ -732,8 +733,8 @@ workflow {
     trim_out = TRIMMOMATIC(bios_ready)
 
     /*
-    * KAIJU depende do trim_dir
-    */
+     * KAIJU depende do trim_dir
+     */
     kaiju_input = trim_out.map { id, trim_dir ->
         tuple(id, trim_dir)
     }
@@ -741,8 +742,8 @@ workflow {
     (kaiju_dir, kaiju_summary) = KAIJU(kaiju_input)
 
     /*
-    * BWA depende do trim_dir também
-    */
+     * BWA depende do trim_dir
+     */
     bwa_input = trim_out.map { id, trim_dir ->
         tuple(id, trim_dir)
     }
@@ -750,9 +751,11 @@ workflow {
     (bwa_tuple, bwa_summary) = BWA(bwa_input)
 
     /*
-    * Barreira do bloco 2
-    */
+     * Barreira BLOCO 2
+     */
     block2_done = bwa_tuple.collect()
+
+
 
     /*
      * ========================================================
@@ -761,21 +764,49 @@ workflow {
      * ========================================================
      */
 
-    bwa_ready = bwa_out
+    bwa_tuple_ready = bwa_tuple
         .combine(block2_done)
         .map { tuple_data, _ -> tuple_data }
 
-    delly_out = DELLY(bwa_ready)
+    bwa_summary_ready = bwa_summary
+        .combine(block2_done)
+        .map { summary, _ -> summary }
 
-    lofreq_out = LOFREQ(delly_out)
+    /*
+     * DELLY
+     */
+    (delly_dir, delly_vcf) =
+        DELLY(bwa_tuple_ready, bwa_summary_ready)
 
-    gatk_gvcf_out = GATK_GVCF(lofreq_out)
+    /*
+     * LOFREQ
+     */
+    (lofreq_dir, lofreq_vcf) =
+        LOFREQ(delly_dir, delly_vcf)
 
-    gatk_vcf_out = GATK_VCF(gatk_gvcf_out)
+    /*
+     * GATK_GVCF
+     */
+    (gatk_dir_gvcf, gatk_gvcf) =
+        GATK_GVCF(lofreq_dir, lofreq_vcf)
 
-    norm_out = NORM(gatk_vcf_out)
+    /*
+     * GATK_VCF
+     */
+    (gatk_dir_vcf, gatk_vcf) =
+        GATK_VCF(gatk_dir_gvcf, gatk_gvcf)
 
+    /*
+     * NORM
+     */
+    norm_out =
+        NORM(gatk_dir_vcf, gatk_vcf)
+
+    /*
+     * Barreira BLOCO 3
+     */
     block3_done = norm_out.collect()
+
 
 
     /*
@@ -800,8 +831,14 @@ workflow {
 
     block4_samples_done = lineage_out.collect()
 
+    /*
+     * COHORT (UMA VEZ)
+     */
     cohort_out = COHORT(block4_samples_done)
 
+    /*
+     * COHORT_FILTER (UMA VEZ)
+     */
     cohort_filter_out = COHORT_FILTER(cohort_out)
 
 }
