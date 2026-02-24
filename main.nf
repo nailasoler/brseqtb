@@ -752,4 +752,140 @@ workflow {
 
     kaiju_out = KAIJU(kaiju_input)
 
+        /*
+     * ========================================================
+     * BLOCO 3 — VARIANT CALLING (FAN-OUT POR BIOSAMPLE)
+     * Só inicia após FINALIZAÇÃO COMPLETA do BLOCO 2
+     * ========================================================
+     */
+
+    // Gatilho global: tudo do bloco 2 precisa ter finalizado
+    block2_done = bwa_out
+        .collect()
+        .combine(kaiju_out.collect())
+        .map { true }
+
+    biosamples_block3 = biosamples_ch
+        .combine(block2_done)
+        .map { biosample, _ -> biosample }
+
+    /*
+     * DELLY — paraleliza por biosample
+     */
+    delly_in = bwa_out
+        .combine(block2_done)
+        .map { tuple_data, _ ->
+            def (biosample, bwa_dir) = tuple_data
+            tuple(biosample, bwa_dir)
+        }
+
+    delly_out = DELLY(delly_in)
+
+    /*
+     * LOFREQ — paraleliza por biosample
+     */
+    lofreq_in = bwa_out
+        .combine(block2_done)
+        .map { tuple_data, _ ->
+            def (biosample, bwa_dir) = tuple_data
+            tuple(biosample, bwa_dir)
+        }
+
+    lofreq_out = LOFREQ(lofreq_in)
+
+    /*
+     * GATK_GVCF — paraleliza por biosample
+     */
+    gatk_gvcf_in = bwa_out
+        .combine(block2_done)
+        .map { tuple_data, _ ->
+            def (biosample, bwa_dir) = tuple_data
+            tuple(biosample, bwa_dir)
+        }
+
+    gatk_gvcf_out = GATK_GVCF(gatk_gvcf_in)
+
+    /*
+     * GATK_VCF — paraleliza por biosample
+     */
+    gatk_vcf_in = bwa_out
+        .combine(block2_done)
+        .map { tuple_data, _ ->
+            def (biosample, bwa_dir) = tuple_data
+            tuple(biosample, bwa_dir)
+        }
+
+    gatk_vcf_out = GATK_VCF(gatk_vcf_in)
+
+    /*
+     * NORM — obrigatoriamente após GATK_VCF
+     */
+    norm_in = gatk_vcf_out
+        .combine(block2_done)
+        .map { tuple_data, _ ->
+            def (biosample, gatk_dir) = tuple_data
+            tuple(biosample, gatk_dir)
+        }
+
+    norm_out = NORM(norm_in)
+
+
+    /*
+     * ========================================================
+     * BLOCO 4 — ANNOTATION + COHORT
+     * Só inicia após FINALIZAÇÃO COMPLETA do BLOCO 3
+     * ========================================================
+     */
+
+    block3_done = delly_out
+        .collect()
+        .combine(lofreq_out.collect())
+        .combine(gatk_gvcf_out.collect())
+        .combine(gatk_vcf_out.collect())
+        .combine(norm_out.collect())
+        .map { true }
+
+    biosamples_block4 = biosamples_ch
+        .combine(block3_done)
+        .map { biosample, _ -> biosample }
+
+    /*
+     * SNPEFF — paraleliza por biosample
+     */
+    snpeff_out = SNPEFF(biosamples_block4)
+
+    /*
+     * TBDR_RCOV — paraleliza por biosample
+     */
+    tbdr_out = TBDR_RCOV(biosamples_block4)
+
+    /*
+     * NTM_FILTER — paraleliza por biosample
+     */
+    ntm_out = NTM_FILTER(biosamples_block4)
+
+    /*
+     * LINEAGE — paraleliza por biosample
+     */
+    lineage_out = LINEAGE(biosamples_block4)
+
+    /*
+     * COHORT — roda uma vez (fan-in), após todos biosamples do bloco 4
+     */
+    cohort_trigger = snpeff_out
+        .collect()
+        .combine(tbdr_out.collect())
+        .combine(ntm_out.collect())
+        .combine(lineage_out.collect())
+        .combine(block3_done)
+        .map { true }
+
+    cohort_out = COHORT(cohort_trigger)
+
+    /*
+     * COHORT_FILTER — obrigatoriamente após COHORT
+     */
+    cohort_filter_out = COHORT_FILTER(cohort_out)
+
+
 }
