@@ -690,9 +690,9 @@ process CLINICAL_REPORT {
 workflow {
 
     /*
-     * ========================================================
+     * ===============================
      * BLOCO 1 — INIT
-     * ========================================================
+     * ===============================
      */
 
     init_token = Channel.value(true)
@@ -711,79 +711,73 @@ workflow {
 
     block1_done = manifest_file.collect()
 
-
     /*
-     * ========================================================
+     * ===============================
      * BLOCO 2 — PREPROCESS
-     * ========================================================
+     * ===============================
      */
 
     biosamples_ch = manifest_file
-        .splitCsv(header: true, sep: '\t')
+        .splitCsv(header:true, sep:'\t')
         .map { row -> row.biosample }
 
     biosamples_ready = biosamples_ch
         .combine(block1_done)
-        .map { biosample, _ -> tuple(biosample, true) }
+        .map { id, _ -> tuple(id, true) }
 
     fastqc_out = FASTQC(biosamples_ready)
 
     trim_out = TRIMMOMATIC(biosamples_ready)
 
-    bwa_input = trim_out.map { biosample, trim_dir ->
-        tuple(biosample, trim_dir)
+    bwa_input = trim_out.map { id, trim_dir ->
+        tuple(id, trim_dir)
     }
 
-    (bwa_out_tuple, bwa_out_summary) = BWA(bwa_input)
+    (bwa_tuple, bwa_summary) = BWA(bwa_input)
 
-    kaiju_input = trim_out.map { biosample, trim_dir ->
-        tuple(biosample, trim_dir)
+    kaiju_input = trim_out.map { id, trim_dir ->
+        tuple(id, trim_dir)
     }
 
-    (kaiju_out_dir, kaiju_out_summary) = KAIJU(kaiju_input)
+    (kaiju_dir, kaiju_summary) = KAIJU(kaiju_input)
 
-    /*
-     * BLOCO 2 TERMINA AQUI
-     * Espera TODOS outputs
-     */
     block2_done = fastqc_out
         .mix(trim_out)
-        .mix(bwa_out_tuple)
-        .mix(bwa_out_summary)
-        .mix(kaiju_out_dir)
-        .mix(kaiju_out_summary)
+        .mix(bwa_tuple)
+        .mix(bwa_summary)
+        .mix(kaiju_dir)
+        .mix(kaiju_summary)
         .collect()
 
-
     /*
-     * ========================================================
+     * ===============================
      * BLOCO 3 — VARIANT CALLING
-     * ========================================================
+     * ===============================
      */
 
-    bwa_ready = bwa_out_tuple
+    bwa_tuple_ready = bwa_tuple
         .combine(block2_done)
-        .map { tuple_data, _ -> tuple_data }
+        .map { t, _ -> t }
+
+    bwa_summary_ready = bwa_summary
+        .combine(block2_done)
+        .map { s, _ -> s }
 
     (delly_dir, delly_vcf) =
-        DELLY(bwa_ready.combine(bwa_out_summary))
+        DELLY(bwa_tuple_ready, bwa_summary_ready)
 
     (lofreq_dir, lofreq_vcf) =
-        LOFREQ(bwa_ready.combine(bwa_out_summary))
+        LOFREQ(bwa_tuple_ready, bwa_summary_ready)
 
     (gatk_dir_gvcf, gatk_gvcf) =
-        GATK_GVCF(bwa_ready.combine(bwa_out_summary))
+        GATK_GVCF(bwa_tuple_ready, bwa_summary_ready)
 
     (gatk_dir_vcf, gatk_vcf) =
-        GATK_VCF(bwa_ready.combine(bwa_out_summary))
+        GATK_VCF(bwa_tuple_ready, bwa_summary_ready)
 
     norm_out =
-        NORM(gatk_dir_vcf.combine(gatk_vcf))
+        NORM(gatk_dir_vcf, gatk_vcf)
 
-    /*
-     * BLOCO 3 TERMINA AQUI
-     * Espera TODOS outputs
-     */
     block3_done = delly_dir
         .mix(delly_vcf)
         .mix(lofreq_dir)
@@ -795,36 +789,28 @@ workflow {
         .mix(norm_out)
         .collect()
 
-
     /*
-     * ========================================================
+     * ===============================
      * BLOCO 4 — ANNOTATION + COHORT
-     * ========================================================
+     * ===============================
      */
 
-    biosamples_block4 = biosamples_ch
+    bios_block4 = biosamples_ch
         .combine(block3_done)
-        .map { biosample, _ -> biosample }
+        .map { id, _ -> id }
 
-    snpeff_out  = SNPEFF(biosamples_block4)
-    tbdr_out    = TBDR_RCOV(biosamples_block4)
-    ntm_out     = NTM_FILTER(biosamples_block4)
-    lineage_out = LINEAGE(biosamples_block4)
+    snpeff_out  = SNPEFF(bios_block4)
+    tbdr_out    = TBDR_RCOV(bios_block4)
+    ntm_out     = NTM_FILTER(bios_block4)
+    lineage_out = LINEAGE(bios_block4)
 
-    /*
-     * BLOCO 4 — FINALIZAÇÃO PER-SAMPLE
-     */
-    block4_samples_done = snpeff_out
+    block4_done = snpeff_out
         .mix(tbdr_out)
         .mix(ntm_out)
         .mix(lineage_out)
         .collect()
 
-    /*
-     * COHORT
-     */
-    cohort_out = COHORT(block4_samples_done)
+    cohort_out = COHORT(block4_done)
 
     cohort_filter_out = COHORT_FILTER(cohort_out)
-
 }
