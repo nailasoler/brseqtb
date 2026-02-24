@@ -712,84 +712,58 @@ workflow {
     // BLOCO 1 TERMINA AQUI
     block1_done = ch_manifest.collect()
 
-    /*
-     * ========================================================
-     * BLOCO 2 — PREPROCESS
-     * ========================================================
-     */
+    // ===== BLOCO 2 =====
 
-    biosamples = ch_manifest
-        .splitCsv(header:true, sep:'\t')
-        .map { row -> row.biosample }
-
-    bios_ready = biosamples
-        .combine(block1_done)
-        .map { id, _ -> tuple(id, true) }
-
-    ch_fastqc  = FASTQC(bios_ready)
-    ch_trim    = TRIMMOMATIC(bios_ready)
-
-    bwa_input = ch_trim.map { id, trim_dir ->
+    bwa_input_block2 = ch_trim.map { id, trim_dir ->
         tuple(id, trim_dir)
     }
 
-    def (ch_bwa_tuple, ch_bwa_summary) = BWA(bwa_input)
+    (ch_bwa_tuple_block2, ch_bwa_summary_block2) = BWA(bwa_input_block2)
 
-    kaiju_input = ch_trim.map { id, trim_dir ->
+    kaiju_input_block2 = ch_trim.map { id, trim_dir ->
         tuple(id, trim_dir)
     }
 
-    def (ch_kaiju_dir, ch_kaiju_summary) = KAIJU(kaiju_input)
+    (ch_kaiju_dir_block2, ch_kaiju_summary_block2) = KAIJU(kaiju_input_block2)
 
-    // BLOCO 2 TERMINA AQUI (TODOS OUTPUTS)
     block2_done = ch_fastqc
         .mix(ch_trim)
-        .mix(ch_bwa_tuple)
-        .mix(ch_bwa_summary)
-        .mix(ch_kaiju_dir)
-        .mix(ch_kaiju_summary)
+        .mix(ch_bwa_tuple_block2)
+        .mix(ch_bwa_summary_block2)
+        .mix(ch_kaiju_dir_block2)
+        .mix(ch_kaiju_summary_block2)
         .collect()
 
-    /*
-     * ========================================================
-     * BLOCO 3 — VARIANT CALLING
-     * ========================================================
-     */
+    // ===== BLOCO 3 =====
 
-    bwa_ready = ch_bwa_tuple
+    bwa_ready_block3 = ch_bwa_tuple_block2
         .combine(block2_done)
         .map { tuple_data, _ -> tuple_data }
 
-    def (ch_delly_dir, ch_delly_vcf) = DELLY(
-        bwa_ready.combine(ch_bwa_summary)
-    )
+    (ch_delly_dir_block3, ch_delly_vcf_block3) =
+        DELLY(bwa_ready_block3.combine(ch_bwa_summary_block2))
 
-    def (ch_lofreq_dir, ch_lofreq_vcf) = LOFREQ(
-        bwa_ready.combine(ch_bwa_summary)
-    )
+    (ch_lofreq_dir_block3, ch_lofreq_vcf_block3) =
+        LOFREQ(bwa_ready_block3.combine(ch_bwa_summary_block2))
 
-    def (ch_gatk_dir_gvcf, ch_gatk_gvcf) = GATK_GVCF(
-        bwa_ready.combine(ch_bwa_summary)
-    )
+    (ch_gatk_dir_gvcf_block3, ch_gatk_gvcf_block3) =
+        GATK_GVCF(bwa_ready_block3.combine(ch_bwa_summary_block2))
 
-    def (ch_gatk_dir_vcf, ch_gatk_vcf) = GATK_VCF(
-        bwa_ready.combine(ch_bwa_summary)
-    )
+    (ch_gatk_dir_vcf_block3, ch_gatk_vcf_block3) =
+        GATK_VCF(bwa_ready_block3.combine(ch_bwa_summary_block2))
 
-    ch_norm = NORM(
-        ch_gatk_dir_vcf.combine(ch_gatk_vcf)
-    )
+    ch_norm_block3 =
+        NORM(ch_gatk_dir_vcf_block3.combine(ch_gatk_vcf_block3))
 
-    // BLOCO 3 TERMINA AQUI (TODOS OUTPUTS)
-    block3_done = ch_delly_dir
-        .mix(ch_delly_vcf)
-        .mix(ch_lofreq_dir)
-        .mix(ch_lofreq_vcf)
-        .mix(ch_gatk_dir_gvcf)
-        .mix(ch_gatk_gvcf)
-        .mix(ch_gatk_dir_vcf)
-        .mix(ch_gatk_vcf)
-        .mix(ch_norm)
+    block3_done = ch_delly_dir_block3
+        .mix(ch_delly_vcf_block3)
+        .mix(ch_lofreq_dir_block3)
+        .mix(ch_lofreq_vcf_block3)
+        .mix(ch_gatk_dir_gvcf_block3)
+        .mix(ch_gatk_gvcf_block3)
+        .mix(ch_gatk_dir_vcf_block3)
+        .mix(ch_gatk_vcf_block3)
+        .mix(ch_norm_block3)
         .collect()
 
     /*
