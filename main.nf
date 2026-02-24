@@ -695,21 +695,24 @@ workflow {
      * ========================================================
      */
 
-    ch1 = Channel.value(true)
+    ch_init = Channel.value(true)
 
-    ch1 = KAIJU_DB(ch1)
-    ch1 = OMS_CATALOG(ch1)
-    ch1 = BWA_REF(ch1)
-    ch1 = GATK_DICT(ch1)
-    ch1 = SNPEFF_DB(ch1)
+    ch_init = KAIJU_DB(ch_init)
+    ch_init = OMS_CATALOG(ch_init)
+    ch_init = BWA_REF(ch_init)
+    ch_init = GATK_DICT(ch_init)
+    ch_init = SNPEFF_DB(ch_init)
 
-    manifest_file = MAKE_MANIFEST_VALIDATE(
-        ch1,
+    ch_manifest = MAKE_MANIFEST_VALIDATE(
+        ch_init,
         file("${projectDir}/input/input_table.xlsx"),
         file("${projectDir}/reads")
     )
 
-    block1_done = manifest_file.collect()
+    /*
+     * Barreira BLOCO 1
+     */
+    ch_block1_done = ch_manifest.collect()
 
 
 
@@ -720,40 +723,36 @@ workflow {
      * ========================================================
      */
 
-    biosamples = manifest_file
+    ch_biosamples = ch_manifest
         .splitCsv(header:true, sep:'\t')
         .map { row -> row.biosample }
 
-    bios_ready = biosamples
-        .combine(block1_done)
+    ch_fastqc_input = ch_biosamples
+        .combine(ch_block1_done)
         .map { id, _ -> tuple(id, true) }
 
-    fastqc_out = FASTQC(bios_ready)
+    ch_fastqc = FASTQC(ch_fastqc_input)
 
-    trim_out = TRIMMOMATIC(bios_ready)
+    ch_trim = TRIMMOMATIC(ch_fastqc_input)
 
-    /*
-     * KAIJU depende do trim_dir
-     */
-    kaiju_input = trim_out.map { id, trim_dir ->
+    ch_kaiju_input = ch_trim.map { id, trim_dir ->
         tuple(id, trim_dir)
     }
 
-    (kaiju_dir, kaiju_summary) = KAIJU(kaiju_input)
+    (ch_kaiju_dir, ch_kaiju_summary) = KAIJU(ch_kaiju_input)
 
-    /*
-     * BWA depende do trim_dir
-     */
-    bwa_input = trim_out.map { id, trim_dir ->
+    ch_bwa_input = ch_trim.map { id, trim_dir ->
         tuple(id, trim_dir)
     }
 
-    (bwa_tuple, bwa_summary) = BWA(bwa_input)
+    (ch_bwa_tuple, ch_bwa_summary) = BWA(ch_bwa_input)
 
     /*
      * Barreira BLOCO 2
      */
-    block2_done = bwa_tuple.collect()
+    ch_block2_done = ch_bwa_tuple
+        .map { true }
+        .collect()
 
 
 
@@ -764,48 +763,35 @@ workflow {
      * ========================================================
      */
 
-    bwa_tuple_ready = bwa_tuple
-        .combine(block2_done)
-        .map { tuple_data, _ -> tuple_data }
+    ch_bwa_tuple_ready = ch_bwa_tuple
+        .combine(ch_block2_done)
+        .map { t, _ -> t }
 
-    bwa_summary_ready = bwa_summary
-        .combine(block2_done)
-        .map { summary, _ -> summary }
+    ch_bwa_summary_ready = ch_bwa_summary
+        .combine(ch_block2_done)
+        .map { s, _ -> s }
 
-    /*
-     * DELLY
-     */
-    (delly_dir, delly_vcf) =
-        DELLY(bwa_tuple_ready, bwa_summary_ready)
+    (ch_delly_dir, ch_delly_vcf) =
+        DELLY(ch_bwa_tuple_ready, ch_bwa_summary_ready)
 
-    /*
-     * LOFREQ
-     */
-    (lofreq_dir, lofreq_vcf) =
-        LOFREQ(delly_dir, delly_vcf)
+    (ch_lofreq_dir, ch_lofreq_vcf) =
+        LOFREQ(ch_delly_dir, ch_delly_vcf)
 
-    /*
-     * GATK_GVCF
-     */
-    (gatk_dir_gvcf, gatk_gvcf) =
-        GATK_GVCF(lofreq_dir, lofreq_vcf)
+    (ch_gatk_dir_gvcf, ch_gatk_gvcf) =
+        GATK_GVCF(ch_lofreq_dir, ch_lofreq_vcf)
 
-    /*
-     * GATK_VCF
-     */
-    (gatk_dir_vcf, gatk_vcf) =
-        GATK_VCF(gatk_dir_gvcf, gatk_gvcf)
+    (ch_gatk_dir_vcf, ch_gatk_vcf) =
+        GATK_VCF(ch_gatk_dir_gvcf, ch_gatk_gvcf)
 
-    /*
-     * NORM
-     */
-    norm_out =
-        NORM(gatk_dir_vcf, gatk_vcf)
+    ch_norm =
+        NORM(ch_gatk_dir_vcf, ch_gatk_vcf)
 
     /*
      * Barreira BLOCO 3
      */
-    block3_done = norm_out.collect()
+    ch_block3_done = ch_norm
+        .map { true }
+        .collect()
 
 
 
@@ -813,32 +799,38 @@ workflow {
      * ========================================================
      * BLOCO 4 — SEQUENCIAL POR BIOSAMPLE
      * snpeff → tbdr → ntm → lineage
-     * depois COHORT → COHORT_FILTER
      * ========================================================
      */
 
-    bios_block4 = biosamples
-        .combine(block3_done)
+    ch_block4_bios = ch_biosamples
+        .combine(ch_block3_done)
         .map { id, _ -> id }
 
-    snpeff_out = SNPEFF(bios_block4)
+    ch_snpeff = SNPEFF(ch_block4_bios)
 
-    tbdr_out = TBDR_RCOV(snpeff_out)
+    ch_tbdr = TBDR_RCOV(ch_snpeff)
 
-    ntm_out = NTM_FILTER(tbdr_out)
+    ch_ntm = NTM_FILTER(ch_tbdr)
 
-    lineage_out = LINEAGE(ntm_out)
-
-    block4_samples_done = lineage_out.collect()
+    ch_lineage = LINEAGE(ch_ntm)
 
     /*
+     * Barreira BLOCO 4 (todas amostras terminaram)
+     */
+    ch_block4_done = ch_lineage
+        .map { true }
+        .collect()
+
+
+
+    /*
+     * ========================================================
      * COHORT (UMA VEZ)
+     * ========================================================
      */
-    cohort_out = COHORT(block4_samples_done)
 
-    /*
-     * COHORT_FILTER (UMA VEZ)
-     */
-    cohort_filter_out = COHORT_FILTER(cohort_out)
+    ch_cohort = COHORT(ch_block4_done)
+
+    ch_cohort_filtered = COHORT_FILTER(ch_cohort)
 
 }
