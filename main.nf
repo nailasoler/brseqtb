@@ -697,76 +697,104 @@ workflow {
 
     init_token = Channel.value(true)
 
-    ch_kaiju   = KAIJU_DB(init_token)
-    ch_oms     = OMS_CATALOG(ch_kaiju)
-    ch_bwaref  = BWA_REF(ch_oms)
-    ch_dict    = GATK_DICT(ch_bwaref)
-    ch_snpeff  = SNPEFF_DB(ch_dict)
+    kaiju_done   = KAIJU_DB(init_token)
+    oms_done     = OMS_CATALOG(kaiju_done)
+    bwa_done     = BWA_REF(oms_done)
+    dict_done    = GATK_DICT(bwa_done)
+    snpeff_done  = SNPEFF_DB(dict_done)
 
-    ch_manifest = MAKE_MANIFEST_VALIDATE(
-        ch_snpeff,
+    manifest_file = MAKE_MANIFEST_VALIDATE(
+        snpeff_done,
         file("${projectDir}/input/input_table.xlsx"),
         file("${projectDir}/reads")
     )
 
-    // BLOCO 1 TERMINA AQUI
-    block1_done = ch_manifest.collect()
+    block1_done = manifest_file.collect()
 
-    // ===== BLOCO 2 =====
 
-    bwa_input_block2 = trim_out.map { id, trim_dir ->
-        tuple(id, trim_dir)
+    /*
+     * ========================================================
+     * BLOCO 2 — PREPROCESS
+     * ========================================================
+     */
+
+    biosamples_ch = manifest_file
+        .splitCsv(header: true, sep: '\t')
+        .map { row -> row.biosample }
+
+    biosamples_ready = biosamples_ch
+        .combine(block1_done)
+        .map { biosample, _ -> tuple(biosample, true) }
+
+    fastqc_out = FASTQC(biosamples_ready)
+
+    trim_out = TRIMMOMATIC(biosamples_ready)
+
+    bwa_input = trim_out.map { biosample, trim_dir ->
+        tuple(biosample, trim_dir)
     }
 
-    (ch_bwa_tuple_block2, ch_bwa_summary_block2) =
-        BWA(bwa_input_block2)
+    (bwa_out_tuple, bwa_out_summary) = BWA(bwa_input)
 
-    kaiju_input_block2 = trim_out.map { id, trim_dir ->
-        tuple(id, trim_dir)
+    kaiju_input = trim_out.map { biosample, trim_dir ->
+        tuple(biosample, trim_dir)
     }
 
-    (ch_kaiju_dir_block2, ch_kaiju_summary_block2) =
-        KAIJU(kaiju_input_block2)
+    (kaiju_out_dir, kaiju_out_summary) = KAIJU(kaiju_input)
 
+    /*
+     * BLOCO 2 TERMINA AQUI
+     * Espera TODOS outputs
+     */
     block2_done = fastqc_out
         .mix(trim_out)
-        .mix(ch_bwa_tuple_block2)
-        .mix(ch_bwa_summary_block2)
-        .mix(ch_kaiju_dir_block2)
-        .mix(ch_kaiju_summary_block2)
+        .mix(bwa_out_tuple)
+        .mix(bwa_out_summary)
+        .mix(kaiju_out_dir)
+        .mix(kaiju_out_summary)
         .collect()
 
-    // ===== BLOCO 3 =====
 
-    bwa_ready_block3 = ch_bwa_tuple_block2
+    /*
+     * ========================================================
+     * BLOCO 3 — VARIANT CALLING
+     * ========================================================
+     */
+
+    bwa_ready = bwa_out_tuple
         .combine(block2_done)
         .map { tuple_data, _ -> tuple_data }
 
-    (ch_delly_dir_block3, ch_delly_vcf_block3) =
-        DELLY(bwa_ready_block3.combine(ch_bwa_summary_block2))
+    (delly_dir, delly_vcf) =
+        DELLY(bwa_ready.combine(bwa_out_summary))
 
-    (ch_lofreq_dir_block3, ch_lofreq_vcf_block3) =
-        LOFREQ(bwa_ready_block3.combine(ch_bwa_summary_block2))
+    (lofreq_dir, lofreq_vcf) =
+        LOFREQ(bwa_ready.combine(bwa_out_summary))
 
-    (ch_gatk_dir_gvcf_block3, ch_gatk_gvcf_block3) =
-        GATK_GVCF(bwa_ready_block3.combine(ch_bwa_summary_block2))
+    (gatk_dir_gvcf, gatk_gvcf) =
+        GATK_GVCF(bwa_ready.combine(bwa_out_summary))
 
-    (ch_gatk_dir_vcf_block3, ch_gatk_vcf_block3) =
-        GATK_VCF(bwa_ready_block3.combine(ch_bwa_summary_block2))
+    (gatk_dir_vcf, gatk_vcf) =
+        GATK_VCF(bwa_ready.combine(bwa_out_summary))
 
-    ch_norm_block3 =
-        NORM(ch_gatk_dir_vcf_block3.combine(ch_gatk_vcf_block3))
+    norm_out =
+        NORM(gatk_dir_vcf.combine(gatk_vcf))
 
-    block3_done = ch_delly_dir_block3
-        .mix(ch_delly_vcf_block3)
-        .mix(ch_lofreq_dir_block3)
-        .mix(ch_lofreq_vcf_block3)
-        .mix(ch_gatk_dir_gvcf_block3)
-        .mix(ch_gatk_gvcf_block3)
-        .mix(ch_gatk_dir_vcf_block3)
-        .mix(ch_gatk_vcf_block3)
-        .mix(ch_norm_block3)
+    /*
+     * BLOCO 3 TERMINA AQUI
+     * Espera TODOS outputs
+     */
+    block3_done = delly_dir
+        .mix(delly_vcf)
+        .mix(lofreq_dir)
+        .mix(lofreq_vcf)
+        .mix(gatk_dir_gvcf)
+        .mix(gatk_gvcf)
+        .mix(gatk_dir_vcf)
+        .mix(gatk_vcf)
+        .mix(norm_out)
         .collect()
+
 
     /*
      * ========================================================
@@ -774,23 +802,29 @@ workflow {
      * ========================================================
      */
 
-    bios_block4 = biosamples
+    biosamples_block4 = biosamples_ch
         .combine(block3_done)
-        .map { id, _ -> id }
+        .map { biosample, _ -> biosample }
 
-    ch_snpeff2 = SNPEFF(bios_block4)
-    ch_tbdr    = TBDR_RCOV(bios_block4)
-    ch_ntm     = NTM_FILTER(bios_block4)
-    ch_lineage = LINEAGE(bios_block4)
+    snpeff_out  = SNPEFF(biosamples_block4)
+    tbdr_out    = TBDR_RCOV(biosamples_block4)
+    ntm_out     = NTM_FILTER(biosamples_block4)
+    lineage_out = LINEAGE(biosamples_block4)
 
-    block4_samples_done = ch_snpeff2
-        .mix(ch_tbdr)
-        .mix(ch_ntm)
-        .mix(ch_lineage)
+    /*
+     * BLOCO 4 — FINALIZAÇÃO PER-SAMPLE
+     */
+    block4_samples_done = snpeff_out
+        .mix(tbdr_out)
+        .mix(ntm_out)
+        .mix(lineage_out)
         .collect()
 
-    ch_cohort = COHORT(block4_samples_done)
+    /*
+     * COHORT
+     */
+    cohort_out = COHORT(block4_samples_done)
 
-    ch_cohort_filtered = COHORT_FILTER(ch_cohort)
+    cohort_filter_out = COHORT_FILTER(cohort_out)
 
 }
