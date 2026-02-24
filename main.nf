@@ -730,13 +730,11 @@ workflow {
 
     def ch_kaiju = ch_trim | KAIJU
 
-    def fastqc_done = ch_fastqc.collect()
-    def trim_done   = ch_trim.collect()
-    def bwa_done    = ch_bwa_tuple.collect()
-    def kaiju_done  = ch_kaiju.collect()
-
-    def block2_done = Channel
-        .combine(fastqc_done, trim_done, bwa_done, kaiju_done)
+    def block2_done = ch_fastqc
+        .mix(ch_trim)
+        .mix(ch_bwa_tuple)
+        .mix(ch_kaiju)
+        .collect()
         .map { true }
 
     /*
@@ -755,14 +753,12 @@ workflow {
 
     def ch_norm       = NORM(ch_gatk_dir, ch_gatk_vcf)
 
-    def delly_done   = ch_delly.collect()
-    def lofreq_done  = ch_lofreq.collect()
-    def gvcf_done    = ch_gatk_gvcf.collect()
-    def gatk_done    = ch_gatk_vcf.collect()
-    def norm_done    = ch_norm.collect()
-
-    def block3_done = Channel
-        .combine(delly_done, lofreq_done, gvcf_done, gatk_done, norm_done)
+    def block3_done = ch_delly
+        .mix(ch_lofreq)
+        .mix(ch_gatk_gvcf)
+        .mix(ch_gatk_vcf)
+        .mix(ch_norm)
+        .collect()
         .map { true }
 
     /*
@@ -783,15 +779,13 @@ workflow {
     def ch_cohort   = block3_done | COHORT
     def ch_cohort_f = ch_cohort | COHORT_FILTER
 
-    def snpeff_done = ch_snpeff.collect()
-    def tbdr_done   = ch_tbdr.collect()
-    def ntm_done    = ch_ntm.collect()
-    def lineage_done= ch_lineage.collect()
-    def cohort_done = ch_cohort.collect()
-    def cohortf_done= ch_cohort_f.collect()
-
-    def block4_done = Channel
-        .combine(snpeff_done, tbdr_done, ntm_done, lineage_done, cohort_done, cohortf_done)
+    def block4_done = ch_snpeff
+        .mix(ch_tbdr)
+        .mix(ch_ntm)
+        .mix(ch_lineage)
+        .mix(ch_cohort)
+        .mix(ch_cohort_f)
+        .collect()
         .map { true }
 
     /*
@@ -804,12 +798,10 @@ workflow {
     def ch_trans      = ch_snp_matrix | TRANSMISSION
     def ch_iqtree     = ch_snp_matrix | IQTREE
 
-    def snpm_done   = ch_snp_matrix.collect()
-    def trans_done  = ch_trans.collect()
-    def iqtree_done = ch_iqtree.collect()
-
-    def block5_done = Channel
-        .combine(snpm_done, trans_done, iqtree_done)
+    def block5_done = ch_snp_matrix
+        .mix(ch_trans)
+        .mix(ch_iqtree)
+        .collect()
         .map { true }
 
     /*
@@ -826,12 +818,10 @@ workflow {
     def ch_target = ch_block6_samples | RESISTANCE_TARGET
     def ch_report = ch_target | RESISTANCE_REPORT
 
-    def mix_done    = ch_mix.collect()
-    def target_done = ch_target.collect()
-    def report_done = ch_report.collect()
-
-    def block6_done = Channel
-        .combine(mix_done, target_done, report_done)
+    def block6_done = ch_mix
+        .mix(ch_target)
+        .mix(ch_report)
+        .collect()
         .map { true }
 
     /*
@@ -843,11 +833,9 @@ workflow {
     def ch_res_sum = block6_done | RESISTANCE_SUMMARY
     def ch_qc_sum  = ch_res_sum | QC_SUMMARY
 
-    def ressum_done = ch_res_sum.collect()
-    def qc_done     = ch_qc_sum.collect()
-
-    def block7_done = Channel
-        .combine(ressum_done, qc_done)
+    def block7_done = ch_res_sum
+        .mix(ch_qc_sum)
+        .collect()
         .map { true }
 
     /*
