@@ -29,8 +29,10 @@ if ! command -v snpEff >/dev/null 2>&1; then
 fi
 
 SNPEFF_BIN="$(which snpEff)"
-SNPEFF_BASE_DIR="$(dirname "$SNPEFF_BIN")/../share/snpeff"
-SNPEFF_CONFIG="${SNPEFF_BASE_DIR}/snpEff.config"
+
+SNPEFF_PROJECT_DIR="${PROJECT_DIR}/database/snpeff"
+SNPEFF_CONFIG="${SNPEFF_PROJECT_DIR}/snpEff.config"
+SNPEFF_DATA_ROOT="${SNPEFF_PROJECT_DIR}/data"
 
 # -------------------- DEPENDENCY CHECKS --------------------
 for cmd in bgzip tabix; do
@@ -125,6 +127,7 @@ for CALLER in "${CALLERS[@]}"; do
 
     snpEff eff \
         -c "$SNPEFF_CONFIG" \
+        -dataDir "$SNPEFF_DATA_ROOT" \
         -v \
         -ud 100 \
         "$GENOME_DB" \

@@ -752,24 +752,37 @@ workflow {
     def block3_done = ch_norm.collect().map { true }
 
     /*
-     * ========================================================
-     * BLOCO 4 — ANNOTATION + COHORT
-     * ========================================================
-     */
+    * ========================================================
+    * BLOCO 4 — ANNOTATION + COHORT
+    * ========================================================
+    */
 
-    // agora TODOS processos recebem bloqueio explícito
+    // 🔒 Liberar biosamples SOMENTE após bloco 3 terminar
     def ch_block4_samples = block3_done
         .combine(ch_biosample_only)
         .map { it[1] }
 
-    def ch_snpeff  = SNPEFF(ch_bwa_tuple, ch_bwa_summary)
+    // 🔒 SNPEFF também bloqueado pelo bloco 3
+    def ch_block4_bwa_tuple = block3_done
+        .combine(ch_bwa_tuple)
+        .map { it[1] }
+
+    def ch_block4_bwa_summary = block3_done
+        .combine(ch_bwa_summary)
+        .map { it[1] }
+
+    def ch_snpeff  = SNPEFF(ch_block4_bwa_tuple, ch_block4_bwa_summary)
+
+    // Processos por biosample
     def ch_tbdr    = ch_block4_samples | TBDR_RCOV
     def ch_ntm     = ch_block4_samples | NTM_FILTER
     def ch_lineage = ch_block4_samples | LINEAGE
 
+    // COHORT roda apenas após bloco 3
     def ch_cohort   = block3_done | COHORT
     def ch_cohort_f = ch_cohort | COHORT_FILTER
 
+    // 🔒 BLOCO 4 termina apenas após cohortFilter
     def block4_done = ch_cohort_f.map { true }
 
     /*
