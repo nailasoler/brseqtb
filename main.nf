@@ -2,29 +2,31 @@ nextflow.enable.dsl = 2
 
 /*
  * ============================================================
- * Parameters
+ * PARAMETERS
  * ============================================================
  */
 
-/*
- * ----------------------------
- * EXECUTION CONTROL
- * ----------------------------
- */
-params.run                = null      // lista de módulos a executar (ex: bwa,lofreq)
-params.add_kaiju_manually = false     // kaiju DB já existe localmente
-
+params.run                = null
+params.add_kaiju_manually = false
+params.input_table        = "input/input_table.xlsx"
+params.reads_dir          = "reads"
 
 /*
  * ============================================================
- * BLOCK 1 - INIT CHAIN — ALWAYS RUN ONCE (CACHED)
+ * BLOCK 1 - INIT CHAIN (SEQUENTIAL + CACHED)
  * ============================================================
  */
 
 process KAIJU_DB {
+
     tag "kaiju-db"
-    input: val token
-    output: val true
+
+    input:
+        val token
+
+    output:
+        val true
+
     script:
     """
     cd "${projectDir}"
@@ -32,10 +34,17 @@ process KAIJU_DB {
     """
 }
 
+
 process OMS_CATALOG {
+
     tag "oms-catalog"
-    input: val token
-    output: val true
+
+    input:
+        val token
+
+    output:
+        val true
+
     script:
     """
     cd "${projectDir}"
@@ -43,10 +52,17 @@ process OMS_CATALOG {
     """
 }
 
+
 process BWA_REF {
+
     tag "bwa-ref"
-    input: val token
-    output: val true
+
+    input:
+        val token
+
+    output:
+        val true
+
     script:
     """
     cd "${projectDir}"
@@ -54,10 +70,17 @@ process BWA_REF {
     """
 }
 
+
 process GATK_DICT {
+
     tag "gatk-dict"
-    input: val token
-    output: val true
+
+    input:
+        val token
+
+    output:
+        val true
+
     script:
     """
     cd "${projectDir}"
@@ -65,10 +88,17 @@ process GATK_DICT {
     """
 }
 
+
 process SNPEFF_DB {
+
     tag "snpeff-db"
-    input: val token
-    output: val true
+
+    input:
+        val token
+
+    output:
+        val true
+
     script:
     """
     cd "${projectDir}"
@@ -76,7 +106,10 @@ process SNPEFF_DB {
     """
 }
 
+
 process MAKE_MANIFEST_VALIDATE {
+
+    tag "manifest"
 
     input:
         val token
@@ -86,17 +119,33 @@ process MAKE_MANIFEST_VALIDATE {
     output:
         path "manifest.tsv"
 
+    publishDir "${projectDir}", mode: 'copy'
+
     script:
     """
     python ${projectDir}/bin/make_manifest_validate.py \
         --xlsx ${input_table} \
         --reads ${reads_dir} \
         --out manifest.tsv
-
-    # COPIA PARA PROJECTDIR (igual aos outros scripts)
-    cp manifest.tsv ${projectDir}/manifest.tsv
     """
 }
 
+/*
+ * ============================================================
+ * WORKFLOW
+ * ============================================================
+ */
 
+workflow {
 
+    Channel.value(true)
+        | KAIJU_DB
+        | OMS_CATALOG
+        | BWA_REF
+        | GATK_DICT
+        | SNPEFF_DB
+        | MAKE_MANIFEST_VALIDATE(
+            file(params.input_table),
+            file(params.reads_dir)
+        )
+}
