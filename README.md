@@ -5,45 +5,6 @@
 - **One-time environment preparation (INIT stage)**
 - **Per-sample analytical workflows**
 
-The pipeline is designed to be:
-
-- Modular  
-- Idempotent  
-- Reproducible  
-- Suitable for local workstations or HPC environments  
-
----
-
-## Table of Contents
-
-- Overview  
-- Requirements  
-- Installation  
-- One-Time Setup Modules (Block 1)  
-- Running the Full Pipeline  
-- Selective Module Execution  
-- Parameters  
-- Output Structure  
-- Idempotency and Reproducibility  
-- Cleaning the Work Directory  
-- License  
-
----
-
-## Overview
-
-The initialization stage of **brseqtb** prepares all shared resources required by the pipeline, including:
-
-- Kaiju taxonomic database  
-- WHO TB Drug Resistance Catalogue processing  
-- Reference genome indexing for BWA  
-- Reference preparation for GATK  
-- Custom SnpEff database  
-- Manifest generation and FASTQ validation  
-
-All setup steps are **idempotent** and safe to run multiple times.
-
----
 
 ## Requirements
 
@@ -63,6 +24,7 @@ Linux or macOS is recommended.
 ```bash
 curl -s https://get.nextflow.io | bash
 sudo mv nextflow /usr/local/bin/
+```
 
 Verify installation:
 
@@ -105,170 +67,77 @@ git clone https://github.com/nailasoler/brseqtb.git
 cd brseqtb
 ```
 
----
+## 🚀 Running brseqtb
 
-## One-Time Setup Modules (Block 1)
-
-The initialization chain prepares:
-
-* Kaiju DB
-* OMS Catalogue
-* BWA index
-* GATK reference files
-* SnpEff DB
-* `manifest.tsv`
-
-Run:
+### 1️⃣ Clone the repository
 
 ```bash
-nextflow run main.nf -resume
+git clone https://github.com/nailasoler/brseqtb.git
+cd brseqtb
 ```
-
-This will:
-
-1. Prepare all databases
-2. Validate `input_table.xlsx`
-3. Validate FASTQ naming
-4. Generate `manifest.tsv`
-
-You only need to rerun this if:
-
-* You change the reference
-* You update the OMS catalogue
-* You modify `input_table.xlsx`
-* You change FASTQs
 
 ---
 
-## Running the Full Pipeline
-
-To execute the complete analysis:
+### 2️⃣ Install Nextflow
 
 ```bash
-nextflow run main.nf -resume
+curl -s https://get.nextflow.io | bash
+sudo mv nextflow /usr/local/bin/
+nextflow -version
 ```
-
-The pipeline will:
-
-* Perform preprocessing
-* Run alignment
-* Call variants
-* Annotate variants
-* Generate resistance reports
-* Build phylogeny
-* Produce final clinical outputs
 
 ---
 
-## Selective Module Execution
+### 3️⃣ Install micromamba (recommended)
 
-You can run specific modules using `--run`.
-
-Example:
-
-Run only BWA and LOFREQ:
+Micromamba is faster and lighter than conda.
 
 ```bash
-nextflow run main.nf --run bwa,lofreq -resume
+# Linux x86_64
+curl -L https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+sudo mv bin/micromamba /usr/local/bin/
+micromamba --version
 ```
 
-Run only LOFREQ using manually provided BAM files:
+---
+
+### 4️⃣ Run the pipeline (default: micromamba)
 
 ```bash
-nextflow run main.nf \
-  --run lofreq \
-  --input_bams results/bwa \
-  -resume
+nextflow run main.nf
 ```
 
-If `--input_bams` is provided, BWA will be skipped and LOFREQ will use those BAM files directly.
+On first execution, the environment will be created automatically from:
+
+```
+envs/brseqtb.yml
+```
 
 ---
 
-## Parameters
+### 🔁 Optional: Run using Conda instead of micromamba
 
-Common parameters:
-
-| Parameter              | Description                                     |
-| ---------------------- | ----------------------------------------------- |
-| `--run`                | Comma-separated list of modules to execute      |
-| `--add_kaiju_manually` | Skip Kaiju download (use existing archive)      |
-| `--input_table`        | Path to `input_table.xlsx`                      |
-| `--reads_dir`          | Directory containing FASTQ files                |
-| `--input_bams`         | Directory containing BAMs for modular execution |
-
-Example:
+If you prefer traditional Conda:
 
 ```bash
-nextflow run main.nf \
-  --reads_dir custom_reads \
-  --input_table custom_input.xlsx \
-  -resume
+nextflow run main.nf -profile conda_profile
 ```
 
----
-
-## Output Structure
-
-```
-project/
-│
-├── work/                 # Nextflow temporary working directory
-├── results/              # Published analysis outputs
-├── database/             # Prepared reference data
-├── manifest.tsv
-├── logs/
-│   ├── trace.txt
-│   ├── timeline.html
-│   ├── report.html
-│   └── dag.html
-```
-
-All analysis outputs are copied to `results/`.
-
-The `work/` directory contains intermediate files and can be safely deleted after completion if not resuming.
-
----
-
-## Idempotency and Reproducibility
-
-All initialization scripts:
-
-* Verify file integrity
-* Skip execution if outputs already exist
-* Validate checksums when applicable
-* Stop execution on error
-
-The pipeline uses:
-
-* Declarative Nextflow channels
-* Controlled resource management
-* Reproducible Conda environments
-
----
-
-## Cleaning the Work Directory
-
-After a successful run:
+Make sure Conda is installed:
 
 ```bash
-rm -rf work/
-```
-
-This does **not** remove final results (they are stored in `results/`).
-
-To force re-execution:
-
-```bash
-nextflow run main.nf -resume false
+conda --version
 ```
 
 ---
 
-## License
+### 📌 Re-running
 
-This project is released under the MIT License.
+The pipeline is fully idempotent:
 
-```
-```
+- Existing databases are not rebuilt  
+- Reference indexes are reused  
+- `manifest.tsv` is regenerated only after successful validation  
+- Nextflow cache avoids re-running completed steps  
 
+Outputs are published in the project root and module-specific directories.

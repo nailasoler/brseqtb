@@ -138,14 +138,16 @@ process MAKE_MANIFEST_VALIDATE {
 
 workflow {
 
-    Channel.value(true)
+    init_done = Channel.value(true)
         | KAIJU_DB
         | OMS_CATALOG
         | BWA_REF
         | GATK_DICT
         | SNPEFF_DB
-        | MAKE_MANIFEST_VALIDATE(
-            file(params.input_table),
-            file(params.reads_dir)
-        )
+
+    MAKE_MANIFEST_VALIDATE(
+        init_done,
+        file(params.input_table),
+        file(params.reads_dir)
+    )
 }

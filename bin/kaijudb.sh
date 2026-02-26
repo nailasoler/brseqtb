@@ -25,14 +25,22 @@ EXPECTED_SHA256="74b05e77a5b43a4d0e6c81cc1dfe826596458889fec3b874ecd2a27a0a36eab
 
 mkdir -p "$(dirname "$DB_TAR")"
 
-# ------------------ VERIFY DATABASE -------------------------
+# VERIFY DATABASE
 verify_database() {
     echo "[DB] Verifying Kaiju database integrity..."
 
     local required=("nodes.dmp" "names.dmp")
     local fmi_file
 
-    fmi_file=$(find "$DB_DIR" -maxdepth 1 -name "*.fmi" | head -n 1 || true)
+    # Require exactly one .fmi file
+    mapfile -t fmis < <(find "$DB_DIR" -maxdepth 1 -name "*.fmi" 2>/dev/null || true)
+
+    if [[ "${#fmis[@]}" -ne 1 ]]; then
+        echo "[DB] Expected exactly 1 .fmi file, found ${#fmis[@]}"
+        return 1
+    fi
+
+    fmi_file="${fmis[0]}"
 
     for f in "${required[@]}"; do
         [[ -s "${DB_DIR}/${f}" ]] || {
@@ -41,21 +49,28 @@ verify_database() {
         }
     done
 
-    [[ -n "${fmi_file:-}" && -s "$fmi_file" ]] || {
+    [[ -s "$fmi_file" ]] || {
         echo "[DB] Missing FMI index"
         return 1
     }
 
+    # Basic corruption check
     head -c 8 "$fmi_file" >/dev/null 2>&1 || {
         echo "[DB] FMI appears corrupted"
         return 1
     }
 
+    # Size sanity check (detect truncated files)
+    if [[ "$(stat -c%s "$fmi_file")" -lt 1000000 ]]; then
+        echo "[DB] FMI file size too small — possibly corrupted"
+        return 1
+    fi
+
     echo "[DB] Database OK."
     return 0
 }
 
-# ------------------ VERIFY ARCHIVE --------------------------
+# VERIFY ARCHIVE 
 verify_archive() {
     [[ -f "$DB_TAR" && -s "$DB_TAR" ]] || {
         echo "[DB] Archive missing: $DB_TAR"
@@ -78,7 +93,7 @@ verify_archive() {
     return 0
 }
 
-# ------------------ DOWNLOAD DATABASE -----------------------
+# DOWNLOAD DATABASE
 download_database() {
     echo "[DB] Downloading Kaiju DB from Zenodo..."
 
@@ -96,7 +111,7 @@ download_database() {
     return 1
 }
 
-# ------------------ EXTRACT DATABASE ------------------------
+# EXTRACT DATABASE
 extract_database() {
     echo "[DB] Extracting Kaiju DB..."
 
@@ -109,7 +124,7 @@ extract_database() {
 }
 
 
-# ---------------------- MAIN --------------------------------
+# MAIN
 echo "[DB] Checking Kaiju database..."
 
 if verify_database; then
