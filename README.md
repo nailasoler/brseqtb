@@ -63,6 +63,21 @@ conda --version
 
 ---
 
+### ⚠ Important — Accept Conda Terms of Service
+
+Recent versions of Conda require accepting the Anaconda channel Terms of Service before creating environments in non-interactive mode (e.g., when running Nextflow).
+
+Run the following commands **once per machine**:
+
+```bash
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+```
+
+This step is required to allow automated environment creation by Nextflow.
+
+---
+
 ## 3️⃣ Clone the repository
 
 ```bash
