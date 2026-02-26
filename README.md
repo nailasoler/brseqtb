@@ -49,15 +49,38 @@ During installation:
 - Accept the default installation path (`~/miniconda3`)
 - You may choose **not** to auto-activate the base environment
 
-After installation, reload your shell:
+---
+
+If you answered "yes" to `conda init` during installation,
+you do NOT need to run `conda init` again.
+
+If you answered "no" to `conda init` during installation, follow the steps below. 
+
+### Initialize Conda (Required for Nextflow)
+
+Nextflow runs in non-interactive shells.  
+To ensure `conda` is available system-wide, initialize it:
+
+```bash
+conda init
+```
+
+Then reload your shell:
 
 ```bash
 source ~/.bashrc
 ```
 
+If you prefer **not** to auto-activate the base environment at terminal startup:
+
+```bash
+conda config --set auto_activate_base false
+```
+
 Verify installation:
 
 ```bash
+which conda
 conda --version
 ```
 
