@@ -110,33 +110,32 @@ cd brseqtb
 
 ---
 
-# Running brseqtb (Conda Default)
+````markdown
+# Running brseqtb (Default: Auto-Scaled Local)
 
 Run the pipeline:
 
 ```bash
 nextflow run main.nf
+````
+
+By default, brseqtb uses the `standard` profile, which automatically detects available CPUs, uses approximately 65% of the machine capacity, balances threads per process and parallel samples, and prevents system overload on laptops and workstations. No profile specification is required for local execution.
+
+## Running on HPC (Scheduler-Driven)
+
+To run on an HPC cluster (e.g., SLURM):
+
+```bash
+nextflow run main.nf -profile hpc
 ```
 
-On first execution:
+The `hpc` profile does not auto-detect CPU percentage, fully respects scheduler resource allocation, uses declared `cpus` and `memory` per process, and follows best practices for cluster environments. You may need to adjust the executor (e.g., `slurm`, `pbs`, etc.) in `nextflow.config` to match your HPC system.
 
-- Nextflow will automatically create the environment defined in:
+## Environment Creation (First Run)
 
-```
-envs/brseqtb.yml
-```
+On first execution, Nextflow will automatically create the Conda environment defined in `envs/brseqtb.yml`. The environment will be stored in `~/.nextflow_conda_cache/`. Subsequent runs will reuse the cached environment.
 
-- The environment will be stored in:
-
-```
-~/.nextflow_conda_cache/
-```
-
-Subsequent runs will reuse the cached environment.
-
----
-
-## Optional: Clean environment and work directory
+## Optional: Clean Environment and Work Directory
 
 If needed:
 
@@ -151,6 +150,18 @@ Then rerun:
 ```bash
 nextflow run main.nf
 ```
+
+## Profiles Summary
+
+| Profile  | Intended Use             | CPU Strategy         |
+| -------- | ------------------------ | -------------------- |
+| standard | Local laptop/workstation | Auto-scaled (~65%)   |
+| hpc      | Cluster environments     | Scheduler-controlled |
+
+## Notes
+
+The pipeline is idempotent. Databases and indexes are not rebuilt if already present. Environments are cached under `~/.nextflow_conda_cache/`. Logs are generated under `logs/`. Outputs are published in the project root and module-specific directories. Resource allocation scales automatically in local mode. HPC execution strictly respects scheduler resource allocation.
+
 
 ---
 
