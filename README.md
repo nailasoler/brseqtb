@@ -5,13 +5,14 @@
 - **One-time environment preparation (INIT stage)**
 - **Per-sample analytical workflows**
 
+# brseqtb — Installation and Execution Guide
 
 ## Requirements
 
 The following tools must be installed:
 
-- **Nextflow** (≥ 24.x recommended)
-- **Conda** or **Micromamba**
+- **Nextflow** (≥ 24.x recommended)  
+- **Conda (Miniconda)**  
 
 Linux or macOS is recommended.
 
@@ -34,7 +35,7 @@ nextflow -version
 
 ---
 
-## 2️⃣ Install Miniconda (required – default environment manager)
+## 2️⃣ Install Miniconda
 
 Download and install Miniconda:
 
@@ -43,13 +44,18 @@ wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh
 ```
 
-After installation, restart your terminal or run:
+During installation:
+
+- Accept the default installation path (`~/miniconda3`)
+- You may choose **not** to auto-activate the base environment
+
+After installation, reload your shell:
 
 ```bash
 source ~/.bashrc
 ```
 
-Verify:
+Verify installation:
 
 ```bash
 conda --version
@@ -57,44 +63,7 @@ conda --version
 
 ---
 
-## 3️⃣ (Optional) Install micromamba (faster alternative)
-
-Micromamba is lighter and significantly faster than conda.
-
-```bash
-curl -L https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
-sudo mv bin/micromamba /usr/local/bin/
-```
-
-Verify:
-
-```bash
-micromamba --version
-```
-
-### ⚠ Important (Nextflow compatibility)
-
-Nextflow calls the binary `mamba` when `useMamba = true`.
-
-To allow Nextflow to use micromamba, create a compatibility link:
-
-```bash
-sudo ln -s $(which micromamba) /usr/local/bin/mamba
-```
-
-Verify:
-
-```bash
-which mamba
-mamba --version
-```
-
-This does **not** replace micromamba.  
-It only allows Nextflow to call it correctly.
-
----
-
-## 4️⃣ Clone the repository
+## 3️⃣ Clone the repository
 
 ```bash
 git clone https://github.com/nailasoler/brseqtb.git
@@ -103,35 +72,52 @@ cd brseqtb
 
 ---
 
-# Running brseqtb
+# Running brseqtb (Conda Default)
 
-## ▶ Default execution (Conda)
-
-Conda is the default environment manager.
+Run the pipeline:
 
 ```bash
 nextflow run main.nf
 ```
 
-On first execution, the environment will be created automatically from:
+On first execution:
+
+- Nextflow will automatically create the environment defined in:
 
 ```
 envs/brseqtb.yml
 ```
 
----
+- The environment will be stored in:
 
-## ⚡ Optional execution with micromamba
-
-If micromamba is installed and linked as described above:
-
-```bash
-nextflow run main.nf -profile micromamba
+```
+~/.nextflow_conda_cache/
 ```
 
-Micromamba significantly reduces environment creation time.
+Subsequent runs will reuse the cached environment.
 
 ---
+
+## Optional: Clean environment and work directory
+
+If needed:
+
+```bash
+nextflow clean -f
+rm -rf ~/.nextflow_conda_cache
+rm -rf work
+```
+
+Then rerun:
+
+```bash
+nextflow run main.nf
+```
+
+---
+
+This setup uses **only Conda** as the environment manager and matches the current `nextflow.config`.
+
 
 # Notes
 
