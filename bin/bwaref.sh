@@ -49,7 +49,7 @@ existing=0
 
 for f in "${INDEX_FILES[@]}"; do
     if [[ -f "$f" ]]; then
-        ((existing++))
+        existing=$((existing + 1))
     fi
 done
 
