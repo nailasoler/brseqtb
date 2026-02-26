@@ -4,7 +4,7 @@
 # Usage: ./bwaref.sh
 # Requires: database/mtbRef/NC0009623.fasta
 #
-# Compatible with Nextflow Conda/Mamba environment
+# Compatible with Nextflow Conda/Micromamba environment
 # ============================================================
 
 set -euo pipefail
@@ -12,23 +12,31 @@ set -euo pipefail
 REF_DIR="database/mtbRef"
 REF="${REF_DIR}/NC0009623.fasta"
 
-# CHECK REFERENCE 
+
+# CHECK REFERENCE
+
 if [[ ! -f "$REF" ]]; then
     echo "[ERROR] Reference genome not found: ${REF}"
     exit 1
 fi
 
+
 # LOCATE BWA (FROM CONDA ENV)
+
 if ! command -v bwa >/dev/null 2>&1; then
     echo "[ERROR] bwa not found in PATH (Conda environment not active?)"
     exit 1
 fi
 
-BWA_BIN="$(which bwa)"
-echo "[INFO] Using bwa binary: ${BWA_BIN}"
-echo "[INFO] bwa version: $(bwa 2>&1 | head -n1)"
+BWA_BIN="$(command -v bwa || true)"
+echo "[INFO] Using bwa binary: ${BWA_BIN:-not found}"
 
-# CHECK INDEX 
+bwa_version="$(bwa 2>&1 | head -n1 || true)"
+echo "[INFO] bwa version: ${bwa_version:-unknown}"
+
+
+# CHECK INDEX
+
 INDEX_FILES=(
     "${REF}.bwt"
     "${REF}.pac"
