@@ -1,8 +1,16 @@
 # brseqtb
 
-**brseqtb** is a modular Nextflow pipeline for *Mycobacterium tuberculosis* whole-genome sequencing analysis, with a clear separation between **one-time environment preparation** and **per-sample analytical workflows**.
+**brseqtb** is a modular Nextflow pipeline for *Mycobacterium tuberculosis* whole-genome sequencing analysis, with a clear separation between:
 
-This repository currently implements the **initial setup stage**, responsible for preparing reference data, databases, and auxiliary files required by downstream analysis modules.
+- **One-time environment preparation (INIT stage)**
+- **Per-sample analytical workflows**
+
+The pipeline is designed to be:
+
+- Modular  
+- Idempotent  
+- Reproducible  
+- Suitable for local workstations or HPC environments  
 
 ---
 
@@ -11,12 +19,13 @@ This repository currently implements the **initial setup stage**, responsible fo
 - Overview  
 - Requirements  
 - Installation  
-- One-Time Setup Modules  
-- Running the Pipeline  
+- One-Time Setup Modules (Block 1)  
+- Running the Full Pipeline  
 - Selective Module Execution  
 - Parameters  
 - Output Structure  
-- Notes on Idempotency  
+- Idempotency and Reproducibility  
+- Cleaning the Work Directory  
 - License  
 
 ---
@@ -25,11 +34,12 @@ This repository currently implements the **initial setup stage**, responsible fo
 
 The initialization stage of **brseqtb** prepares all shared resources required by the pipeline, including:
 
-- Directory structure  
 - Kaiju taxonomic database  
 - WHO TB Drug Resistance Catalogue processing  
 - Reference genome indexing for BWA  
 - Reference preparation for GATK  
+- Custom SnpEff database  
+- Manifest generation and FASTQ validation  
 
 All setup steps are **idempotent** and safe to run multiple times.
 
@@ -37,166 +47,228 @@ All setup steps are **idempotent** and safe to run multiple times.
 
 ## Requirements
 
-The following tools must be available in the environment:
+The following tools must be installed:
 
-- **Nextflow** (≥ 24.x)  
-- **Java** (for GATK)  
-- **Python 3** with:
-  - pandas  
-  - numpy  
-- **bwa**  
-- **samtools**  
-- **gatk**  
+- **Nextflow** (≥ 24.x recommended)
+- **Conda** or **Micromamba**
 
-> Tool installation is intentionally left to the user or environment (local, HPC, container).
+Linux or macOS is recommended.
 
 ---
 
 ## Installation
 
-Clone the repository:
+### 1️⃣ Install Nextflow
+
+```bash
+curl -s https://get.nextflow.io | bash
+sudo mv nextflow /usr/local/bin/
+
+Verify installation:
+
+```bash
+nextflow -version
+```
+
+---
+
+### 2️⃣ Install Conda (Miniconda)
+
+Download and install Miniconda:
+
+```bash
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh
+```
+
+Restart your shell and verify:
+
+```bash
+conda --version
+```
+
+---
+
+### Alternative: Install Micromamba (lightweight option)
+
+```bash
+curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+sudo mv bin/micromamba /usr/local/bin/
+```
+
+---
+
+### 3️⃣ Clone the repository
 
 ```bash
 git clone https://github.com/nailasoler/brseqtb.git
 cd brseqtb
 ```
 
-## One-Time Setup Modules
+---
 
-The following modules do not depend on biosamples and are designed to run once per project.  
-All modules are idempotent and can be safely re-executed if needed.
+## One-Time Setup Modules (Block 1)
 
-- **init_pipeline.sh**  
-  Creates the runtime directory structure and validates the presence of versioned reference files.  
-  This is always the first step of the pipeline.
+The initialization chain prepares:
 
-- **kaijudb**  
-  Prepares the Kaiju Mycobacterium database.  
-  By default, the database is downloaded automatically from Zenodo, verified by checksum, and extracted.  
-  A manual mode is available for offline or HPC environments.
+* Kaiju DB
+* OMS Catalogue
+* BWA index
+* GATK reference files
+* SnpEff DB
+* `manifest.tsv`
 
-- **omsCatalog**  
-  Processes the WHO TB Drug Resistance Catalogue Excel file and generates derived BED and CSV files used by downstream analyses.  
-  If all expected output files already exist, execution is skipped.
+Run:
 
-- **bwaref**  
-  Prepares the reference genome for BWA by building the required index files if they are missing.
+```bash
+nextflow run main.nf -resume
+```
 
-- **gatkdict**  
-  Prepares the reference genome for GATK by creating the FASTA index (.fai) and the sequence dictionary (.dict) if they are missing.
+This will:
+
+1. Prepare all databases
+2. Validate `input_table.xlsx`
+3. Validate FASTQ naming
+4. Generate `manifest.tsv`
+
+You only need to rerun this if:
+
+* You change the reference
+* You update the OMS catalogue
+* You modify `input_table.xlsx`
+* You change FASTQs
 
 ---
 
-## Running the Pipeline
+## Running the Full Pipeline
 
-### Full initialization (default)
-
-Running the pipeline without additional parameters executes all setup modules in the correct order:
+To execute the complete analysis:
 
 ```bash
-nextflow run main.nf
+nextflow run main.nf -resume
 ```
 
-## Pipeline Parameters
+The pipeline will:
 
-The initialization stage of **brseqtb** can be executed fully or partially using command-line parameters.  
-All parameters are optional unless explicitly stated.
-
-### Module Selection Parameters
-
-These parameters control which setup modules are executed.
-
-- **--run_init**  
-  Runs the `init_pipeline` module.  
-  This module creates the runtime directory structure and validates versioned resources.  
-  Default: true
-
-- **--run_kaijudb**  
-  Runs the `kaijudb` module to prepare the Kaiju Mycobacterium database.  
-  Default: true
-
-- **--run_omsCatalog**  
-  Runs the OMS TB Drug Resistance Catalogue processing module.  
-  Default: true
-
-- **--run_bwaref**  
-  Runs the BWA reference preparation module (BWA index creation).  
-  Default: true
-
-- **--run_gatkdict**  
-  Runs the GATK reference preparation module (FASTA index and sequence dictionary).  
-  Default: true
-
-Any module can be disabled by explicitly setting its parameter to `false`.
+* Perform preprocessing
+* Run alignment
+* Call variants
+* Annotate variants
+* Generate resistance reports
+* Build phylogeny
+* Produce final clinical outputs
 
 ---
 
-### Kaiju Database Parameters
+## Selective Module Execution
 
-- **--add_kaiju_manually**  
-  Controls how the Kaiju database is prepared.
+You can run specific modules using `--run`.
 
-  - false (default):  
-    The Kaiju database is downloaded automatically from Zenodo, verified by checksum, and extracted.
+Example:
 
-  - true:  
-    Indicates that the user has manually placed the Kaiju database archive or files in the expected directory.  
-    The pipeline will validate and extract the database without attempting a download.
+Run only BWA and LOFREQ:
+
+```bash
+nextflow run main.nf --run bwa,lofreq -resume
+```
+
+Run only LOFREQ using manually provided BAM files:
+
+```bash
+nextflow run main.nf \
+  --run lofreq \
+  --input_bams results/bwa \
+  -resume
+```
+
+If `--input_bams` is provided, BWA will be skipped and LOFREQ will use those BAM files directly.
 
 ---
 
-### Examples
+## Parameters
 
-Run all initialization modules (default behavior):
+Common parameters:
 
-```bash
-nextflow run main.nf
-```
+| Parameter              | Description                                     |
+| ---------------------- | ----------------------------------------------- |
+| `--run`                | Comma-separated list of modules to execute      |
+| `--add_kaiju_manually` | Skip Kaiju download (use existing archive)      |
+| `--input_table`        | Path to `input_table.xlsx`                      |
+| `--reads_dir`          | Directory containing FASTQ files                |
+| `--input_bams`         | Directory containing BAMs for modular execution |
 
-Run only the initial directory setup:
-
-```bash
-nextflow run main.nf --run init
-```
-
-Run only the Kaiju database preparation (automatic download):
+Example:
 
 ```bash
-nextflow run main.nf --run kaiju
+nextflow run main.nf \
+  --reads_dir custom_reads \
+  --input_table custom_input.xlsx \
+  -resume
 ```
 
-Run only the Kaiju database preparation using a manually provided database:
+---
+
+## Output Structure
+
+```
+project/
+│
+├── work/                 # Nextflow temporary working directory
+├── results/              # Published analysis outputs
+├── database/             # Prepared reference data
+├── manifest.tsv
+├── logs/
+│   ├── trace.txt
+│   ├── timeline.html
+│   ├── report.html
+│   └── dag.html
+```
+
+All analysis outputs are copied to `results/`.
+
+The `work/` directory contains intermediate files and can be safely deleted after completion if not resuming.
+
+---
+
+## Idempotency and Reproducibility
+
+All initialization scripts:
+
+* Verify file integrity
+* Skip execution if outputs already exist
+* Validate checksums when applicable
+* Stop execution on error
+
+The pipeline uses:
+
+* Declarative Nextflow channels
+* Controlled resource management
+* Reproducible Conda environments
+
+---
+
+## Cleaning the Work Directory
+
+After a successful run:
 
 ```bash
-nextflow run main.nf --run kaiju --add_kaiju_manually true
+rm -rf work/
 ```
 
-Run only the OMS TB Drug Resistance Catalogue processing:
+This does **not** remove final results (they are stored in `results/`).
+
+To force re-execution:
 
 ```bash
-nextflow run main.nf --run oms
+nextflow run main.nf -resume false
 ```
 
-Run only reference preparation for BWA:
+---
 
-```bash
-nextflow run main.nf --run bwaref
+## License
+
+This project is released under the MIT License.
+
+```
 ```
 
-Run only reference preparation for GATK:
-
-```bash
-nextflow run main.nf --run gatkdict
-```
-
-Run multiple modules in a custom combination:
-
-```bash
-nextflow run main.nf --run init,oms,bwaref
-```
-
-Run reference-related modules only (BWA + GATK):
-
-```bash
-nextflow run main.nf --run bwaref,gatkdict
-```
