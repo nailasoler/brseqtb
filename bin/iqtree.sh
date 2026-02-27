@@ -30,8 +30,8 @@ OUTPUT_DIR="${PROJECT_DIR}/iqtree"
 # ============================================================
 # Check dependencies and input
 # ============================================================
-if ! command -v iqtree2 >/dev/null 2>&1; then
-    echo "[ERROR] 'iqtree2' not found in PATH."
+if ! command -v iqtree >/dev/null 2>&1; then
+    echo "[ERROR] 'iqtree' not found in PATH."
     exit 1
 fi
 
@@ -51,7 +51,7 @@ echo "[OUT] Output directory: $OUTPUT_DIR"
 echo "[SET] Model=$MODEL | Bootstraps=$BOOTSTRAP | Threads=$THREADS"
 echo "---------------------------------------------"
 
-iqtree2 \
+iqtree \
     -s "$INPUT_FASTA" \
     -m "$MODEL" \
     -B "$BOOTSTRAP" \
