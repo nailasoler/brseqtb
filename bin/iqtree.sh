@@ -11,7 +11,7 @@ set -euo pipefail
 # ============================================================
 # PARAMETERS
 # ============================================================
-THREADS="${THREADS:-1}"
+THREADS="${NXF_TASK_CPUS:-1}"
 MODEL="HKY+I+G"
 BOOTSTRAP=1000
 

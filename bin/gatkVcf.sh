@@ -12,7 +12,7 @@ set -euo pipefail
 START_TIME=$SECONDS
 
 BIOSAMPLE="${1:-}"
-THREADS="${THREADS:-${NXF_TASK_CPUS:-1}}"
+THREADS="${NXF_TASK_CPUS:-1}"
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 

@@ -16,6 +16,7 @@
 set -euo pipefail
 
 BIOSAMPLE="${1:-}"
+THREADS="${NXF_TASK_CPUS:-1}"
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 READS_DIR="${PROJECT_DIR}/reads"
@@ -88,7 +89,7 @@ for R1 in "${R1_FILES[@]}"; do
 
     >&2 echo "[RUN] Trimming: $(basename "$R1") and $(basename "$R2")"
 
-    trimmomatic PE \
+    trimmomatic PE -threads "$THREADS" \
         "$R1" "$R2" \
         "$OUT_R1_PAIRED" "$OUT_R1_UNPAIRED" \
         "$OUT_R2_PAIRED" "$OUT_R2_UNPAIRED" \

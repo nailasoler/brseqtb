@@ -167,7 +167,7 @@ process TRIMMOMATIC {
     script:
     """
     cd "${projectDir}"
-    bash bin/trimmomatic.sh ${biosample} ${params.reads_dir}
+    bash bin/trimmomatic.sh ${biosample}
     """
 }
 

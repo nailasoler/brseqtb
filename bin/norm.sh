@@ -19,7 +19,6 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ================= INPUTS =================
 BIOSAMPLE="${1:-}"
-THREADS="${THREADS:-1}"
 
 INPUT_DIR="${PROJECT_DIR}/gatk/${BIOSAMPLE}"
 REF="${PROJECT_DIR}/database/mtbRef/NC0009623.fasta"

@@ -6,7 +6,6 @@
 set -euo pipefail
 
 BIOSAMPLE="${1:-}"
-THREADS="${THREADS:-${NXF_TASK_CPUS:-1}}"
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 

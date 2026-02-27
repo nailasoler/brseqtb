@@ -56,7 +56,7 @@ REF="${PROJECT_DIR}/database/mtbRef/NC0009623.fasta"
 GATK_DIR="${PROJECT_DIR}/gatk"
 DEMO_DIR="${PROJECT_DIR}/assets/demo/gatk"
 
-THREADS="${THREADS:-1}"
+THREADS="${NXF_TASK_CPUS:-1}"
 
 mkdir -p "${OUTPUT_DIR}"
 

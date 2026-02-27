@@ -8,7 +8,7 @@
 set -euo pipefail
 
 BIOSAMPLE="${1:-}"
-THREADS="${THREADS:-1}"
+THREADS="${NXF_TASK_CPUS:-1}"
 
 # IMPORTANT:
 # When executed by Nextflow, cwd = work/<hash>
