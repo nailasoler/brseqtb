@@ -141,15 +141,15 @@ process FASTQC {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(reads_dir)
+        val biosample
 
     output:
-        tuple val(biosample), path(reads_dir)
+        val biosample
 
     script:
     """
     cd "${projectDir}"
-    bash bin/fastqc.sh ${biosample} ${reads_dir}
+    bash bin/fastqc.sh ${biosample} ${params.reads_dir}
     """
 }
 
@@ -159,15 +159,15 @@ process TRIMMOMATIC {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(reads_dir)
+        val biosample
 
     output:
-        tuple val(biosample), path(reads_dir)
+        val biosample
 
     script:
     """
     cd "${projectDir}"
-    bash bin/trimmomatic.sh ${biosample} ${reads_dir}
+    bash bin/trimmomatic.sh ${biosample} ${params.reads_dir}
     """
 }
 
@@ -177,10 +177,10 @@ process KAIJU {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(reads_dir)
+        val biosample
 
     output:
-        tuple val(biosample)
+        val biosample
 
     script:
     """
@@ -195,10 +195,10 @@ process BWA {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(reads_dir)
+        val biosample
 
     output:
-        tuple val(biosample)
+        val biosample
 
     script:
     """
@@ -207,15 +207,16 @@ process BWA {
     """
 }
 
+
 process DELLY {
 
     tag { biosample }
 
     input:
-        tuple val(biosample)
+        val biosample
 
     output:
-        tuple val(biosample)
+        val biosample
 
     script:
     """
@@ -230,10 +231,10 @@ process LOFREQ {
     tag { biosample }
 
     input:
-        tuple val(biosample)
+        val biosample
 
     output:
-        tuple val(biosample)
+        val biosample
 
     script:
     """
@@ -248,10 +249,10 @@ process GATK_GVCF {
     tag { biosample }
 
     input:
-        tuple val(biosample)
+        val biosample
 
     output:
-        tuple val(biosample)
+        val biosample
 
     script:
     """
@@ -266,10 +267,10 @@ process GATK_VCF {
     tag { biosample }
 
     input:
-        tuple val(biosample)
+        val biosample
 
     output:
-        tuple val(biosample)
+        val biosample
 
     script:
     """
@@ -284,10 +285,10 @@ process NORM {
     tag { biosample }
 
     input:
-        tuple val(biosample)
+        val biosample
 
     output:
-        tuple val(biosample)
+        val biosample
 
     script:
     """
@@ -332,9 +333,7 @@ workflow {
 
     samples_ch = manifest_ch
         .splitCsv(header:true, sep:'\t')
-        .map { row ->
-            tuple(row.biosample, file(params.reads_dir))
-        }
+        .map { row -> row.biosample }
 
     /*
      * ============================================================
