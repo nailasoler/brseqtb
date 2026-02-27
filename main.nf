@@ -132,7 +132,7 @@ process MAKE_MANIFEST_VALIDATE {
 
 /*
  * ============================================================
- * BLOCK 1 - PER SAMPLE (PARALLEL)
+ * BLOCK 1 — PER BIOSAMPLE
  * ============================================================
  */
 
@@ -141,17 +141,15 @@ process FASTQC {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(reads)
+        tuple val(biosample), path(reads_dir)
 
     output:
-        tuple val(biosample), path("${biosample}")
-
-    publishDir "${projectDir}/fastqc", mode: 'copy'
+        tuple val(biosample), path(reads_dir)
 
     script:
     """
-    bash ${projectDir}/bin/fastqc.sh "${biosample}"
-    cp -r ${projectDir}/fastqc/${biosample} .
+    cd "${projectDir}"
+    bash bin/fastqc.sh ${biosample} ${reads_dir}
     """
 }
 
@@ -161,17 +159,15 @@ process TRIMMOMATIC {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(reads)
+        tuple val(biosample), path(reads_dir)
 
     output:
-        tuple val(biosample), path("${biosample}")
-
-    publishDir "${projectDir}/trimmomatic", mode: 'copy'
+        tuple val(biosample), path(reads_dir)
 
     script:
     """
-    bash ${projectDir}/bin/trimmomatic.sh "${biosample}"
-    cp -r ${projectDir}/trimmomatic/${biosample} .
+    cd "${projectDir}"
+    bash bin/trimmomatic.sh ${biosample} ${reads_dir}
     """
 }
 
@@ -181,20 +177,15 @@ process KAIJU {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(trim_dir)
+        tuple val(biosample), path(reads_dir)
 
     output:
-        tuple val(biosample), path("${biosample}")
-        path "${biosample}_kaiju_summary.csv"
-
-    publishDir "${projectDir}/kaiju", mode: 'copy'
+        tuple val(biosample)
 
     script:
     """
-    export THREADS=${task.cpus}
-    bash ${projectDir}/bin/kaiju.sh "${biosample}"
-    cp -r ${projectDir}/kaiju/${biosample} .
-    cp ${projectDir}/kaiju/${biosample}/${biosample}_kaiju_summary.csv .
+    cd "${projectDir}"
+    bash bin/kaiju.sh ${biosample}
     """
 }
 
@@ -204,44 +195,32 @@ process BWA {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(trim_dir)
+        tuple val(biosample), path(reads_dir)
 
     output:
-        tuple val(biosample), path("${biosample}")
-        path "${biosample}_bwa_summary.csv"
-
-    publishDir "${projectDir}/bwa", mode: 'copy'
+        tuple val(biosample)
 
     script:
     """
-    export THREADS=${task.cpus}
-    bash ${projectDir}/bin/bwa.sh "${biosample}"
-    cp -r ${projectDir}/bwa/${biosample} .
-    cp ${projectDir}/bwa/${biosample}/${biosample}_bwa_summary.csv .
+    cd "${projectDir}"
+    bash bin/bwa.sh ${biosample}
     """
 }
-
 
 process DELLY {
 
     tag { biosample }
 
     input:
-        tuple val(biosample), path(bwa_dir)
-        path bwa_summary
+        tuple val(biosample)
 
     output:
-        tuple val(biosample), path("${biosample}")
-        path "${biosample}_delly.vcf.gz"
-
-    publishDir "${projectDir}/delly", mode: 'copy'
+        tuple val(biosample)
 
     script:
     """
-    export THREADS=${task.cpus}
-    bash ${projectDir}/bin/delly.sh "${biosample}"
-    cp -r ${projectDir}/delly/${biosample} .
-    cp ${projectDir}/delly/${biosample}/${biosample}_delly.vcf.gz .
+    cd "${projectDir}"
+    bash bin/delly.sh ${biosample}
     """
 }
 
@@ -251,20 +230,15 @@ process LOFREQ {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(bwa_dir)
-        path bwa_summary
+        tuple val(biosample)
 
     output:
-        tuple val(biosample), path("${biosample}")
-        path "${biosample}_lofreq.vcf.gz"
-
-    publishDir "${projectDir}/lofreq", mode: 'copy'
+        tuple val(biosample)
 
     script:
     """
-    bash ${projectDir}/bin/lofreq.sh "${biosample}"
-    cp -r ${projectDir}/lofreq/${biosample} .
-    cp ${projectDir}/lofreq/${biosample}/${biosample}_lofreq.vcf.gz .
+    cd "${projectDir}"
+    bash bin/lofreq.sh ${biosample}
     """
 }
 
@@ -274,21 +248,15 @@ process GATK_GVCF {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(bwa_dir)
-        path bwa_summary
+        tuple val(biosample)
 
     output:
-        tuple val(biosample), path("${biosample}")
-        path "${biosample}.g.vcf.gz"
-
-    publishDir "${projectDir}/gatk", mode: 'copy'
+        tuple val(biosample)
 
     script:
     """
-    export THREADS=${task.cpus}
-    bash ${projectDir}/bin/gatkGvcf.sh "${biosample}"
-    cp -r ${projectDir}/gatk/${biosample} .
-    cp ${projectDir}/gatk/${biosample}/${biosample}.g.vcf.gz .
+    cd "${projectDir}"
+    bash bin/gatkGvcf.sh ${biosample}
     """
 }
 
@@ -298,21 +266,15 @@ process GATK_VCF {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(bwa_dir)
-        path bwa_summary
+        tuple val(biosample)
 
     output:
-        tuple val(biosample), path("${biosample}")
-        path "${biosample}_gatk.vcf.gz"
-
-    publishDir "${projectDir}/gatk", mode: 'copy'
+        tuple val(biosample)
 
     script:
     """
-    export THREADS=${task.cpus}
-    bash ${projectDir}/bin/gatkVcf.sh "${biosample}"
-    cp -r ${projectDir}/gatk/${biosample} .
-    cp ${projectDir}/gatk/${biosample}/${biosample}_gatk.vcf.gz .
+    cd "${projectDir}"
+    bash bin/gatkVcf.sh ${biosample}
     """
 }
 
@@ -322,350 +284,24 @@ process NORM {
     tag { biosample }
 
     input:
-        tuple val(biosample), path(gatk_dir)
-        path vcf_file
+        tuple val(biosample)
 
     output:
-        tuple val(biosample), path("${biosample}")
-
-    publishDir "${projectDir}/norm", mode: 'copy'
+        tuple val(biosample)
 
     script:
     """
-    bash ${projectDir}/bin/norm.sh "${biosample}"
-    cp -r ${projectDir}/norm/${biosample} .
+    cd "${projectDir}"
+    bash bin/norm.sh ${biosample}
     """
 }
 
-
-process SNPEFF {
-
-    tag { biosample }
-
-    input:
-        tuple val(biosample), path(norm_dir)
-
-    output:
-        tuple val(biosample), path("${biosample}")
-
-    publishDir "${projectDir}/snpeff", mode: 'copy'
-
-    script:
-    """
-    bash ${projectDir}/bin/snpeff.sh "${biosample}"
-    cp -r ${projectDir}/snpeff/${biosample} .
-    """
-}
-
-
-process TBDR_RCOV {
-
-    tag { biosample }
-
-    input:
-        tuple val(biosample), path(gvcf_dir)
-
-    output:
-        tuple val(biosample), path("${biosample}")
-
-    publishDir "${projectDir}/tbdrRCov", mode: 'copy'
-
-    script:
-    """
-    python ${projectDir}/bin/tbdrRCov.py "${biosample}"
-    cp -r ${projectDir}/tbdrRCov/${biosample} .
-    """
-}
-
-
-process NTM_FILTER {
-
-    tag { biosample }
-
-    input:
-        tuple val(biosample), path(gvcf_dir)
-
-    output:
-        tuple val(biosample), path("${biosample}")
-
-    publishDir "${projectDir}/ntmFilter", mode: 'copy'
-
-    script:
-    """
-    bash ${projectDir}/bin/ntmFilter.sh "${biosample}"
-    cp -r ${projectDir}/ntmFilter/${biosample} .
-    """
-}
-
-
-process LINEAGE {
-
-    tag { biosample }
-
-    input:
-        tuple val(biosample), path(norm_dir)
-
-    output:
-        tuple val(biosample), path("${biosample}")
-
-    publishDir "${projectDir}/lineage", mode: 'copy'
-
-    script:
-    """
-    python ${projectDir}/bin/lineage.py "${biosample}"
-    cp -r ${projectDir}/lineage/${biosample} .
-    """
-}
-
-/*
- * ============================================================
- * BLOCK 2 - GLOBAL (AFTER ALL SAMPLES COMPLETE BLOCK 1)
- * ============================================================
- */
-
-process COHORT {
-
-    tag "cohort"
-
-    input:
-        val trigger
-
-    output:
-        path "cohort"
-
-    publishDir "${projectDir}/cohort", mode: 'copy'
-
-    script:
-    """
-    bash ${projectDir}/bin/cohort.sh ${projectDir}/manifest.tsv
-    cp -r ${projectDir}/cohort/* cohort/ || true
-    """
-}
-
-
-process COHORT_FILTER {
-
-    tag "cohort-filter"
-
-    input:
-        path cohort_dir
-
-    output:
-        path "cohort_filtered"
-
-    publishDir "${projectDir}/cohort_filtered", mode: 'copy'
-
-    script:
-    """
-    python ${projectDir}/bin/cohortFilter.py
-    cp -r ${projectDir}/cohort_filtered/* cohort_filtered/ || true
-    """
-}
-
-
-process SNP_MATRIX {
-
-    tag "snp-matrix"
-
-    input:
-        val trigger
-
-    output:
-        path "snpMatrix"
-
-    publishDir "${projectDir}/snpMatrix", mode: 'copy'
-
-    script:
-    """
-    python ${projectDir}/bin/snpMatrix.py
-    cp -r ${projectDir}/snpMatrix/* snpMatrix/ || true
-    """
-}
-
-
-process TRANSMISSION {
-
-    tag "transmission"
-
-    input:
-        path snp_matrix_dir
-
-    output:
-        path "transmission"
-
-    publishDir "${projectDir}/transmission", mode: 'copy'
-
-    script:
-    """
-    python ${projectDir}/bin/transmission.py
-    cp -r ${projectDir}/transmission/* transmission/ || true
-    """
-}
-
-
-process IQTREE {
-
-    tag "iqtree"
-
-    input:
-        path snp_matrix_dir
-
-    output:
-        path "iqtree"
-
-    publishDir "${projectDir}/iqtree", mode: 'copy'
-
-    script:
-    """
-    export THREADS=${task.cpus}
-    bash ${projectDir}/bin/iqtree.sh
-    cp -r ${projectDir}/iqtree/* iqtree/ || true
-    """
-}
-
-/*
- * ============================================================
- * BLOCK 3 - AFTER BLOCK 2 (GLOBAL SYNC)
- * ============================================================
- */
-
-process MIXINFECTION {
-
-    tag { biosample }
-
-    input:
-        tuple val(biosample), path(snp_matrix_dir)
-
-    output:
-        tuple val(biosample), path("${biosample}")
-
-    publishDir "${projectDir}/mixInfection", mode: 'copy'
-
-    script:
-    """
-    python ${projectDir}/bin/mixInfection.py "${biosample}"
-    cp -r ${projectDir}/mixInfection/${biosample} .
-    """
-}
-
-
-process RESISTANCE_TARGET {
-
-    tag { biosample }
-
-    input:
-        tuple val(biosample), path(snpeff_dir)
-
-    output:
-        path "${biosample}_OMStarget.xlsx"
-
-    publishDir "${projectDir}/resistance", mode: 'copy'
-
-    script:
-    """
-    python ${projectDir}/bin/resistanceTarget.py "${biosample}"
-    cp ${projectDir}/resistance/${biosample}/${biosample}_OMStarget.xlsx .
-    """
-}
-
-
-process RESISTANCE_REPORT {
-
-    tag { omstarget.baseName }
-
-    input:
-        path omstarget
-
-    output:
-        path "${omstarget.baseName}.xlsx"
-
-    publishDir "${projectDir}/results/resistance", mode: 'copy'
-
-    script:
-    """
-    BIOSAMPLE=\$(basename "${omstarget}" _OMStarget.xlsx)
-    python ${projectDir}/bin/resistanceReport.py "\$BIOSAMPLE"
-    cp ${projectDir}/results/resistance/\$BIOSAMPLE.xlsx .
-    """
-}
-
-
-/*
- * ============================================================
- * BLOCK 4 - AFTER BLOCK 3 (GLOBAL SYNC)
- * ============================================================
- */
-
-process RESISTANCE_SUMMARY {
-
-    tag "resistance-summary"
-
-    input:
-        val trigger
-
-    output:
-        path "resistanceSummary"
-
-    publishDir "${projectDir}/results", mode: 'copy'
-
-    script:
-    """
-    python ${projectDir}/bin/resistanceSummary.py
-    cp -r ${projectDir}/results/resistanceSummary/* resistanceSummary/ || true
-    """
-}
-
-
-process QC_SUMMARY {
-
-    tag "qc-summary"
-
-    input:
-        val trigger
-
-    output:
-        path "qcSummary"
-
-    publishDir "${projectDir}/results", mode: 'copy'
-
-    script:
-    """
-    python ${projectDir}/bin/qcSummary.py
-    cp -r ${projectDir}/results/qcSummary/* qcSummary/ || true
-    """
-}
-
-
-/*
- * ============================================================
- * BLOCK 5 - FINAL
- * ============================================================
- */
-
-process CLINICAL_REPORT {
-
-    tag { biosample }
-
-    input:
-        val biosample
-
-    output:
-        path "${biosample}.docx"
-
-    publishDir "${projectDir}/results/clinicalReport", mode: 'copy'
-
-    script:
-    """
-    python ${projectDir}/bin/clinicalReport.py "${biosample}"
-    cp ${projectDir}/results/clinicalReport/${biosample}.docx .
-    """
-}
 
 workflow {
 
     /*
      * ============================================================
-     * INIT (GLOBAL - roda 1x)
+     * INIT (SEQUENTIAL)
      * ============================================================
      */
 
@@ -676,6 +312,12 @@ workflow {
         | GATK_DICT
         | SNPEFF_DB
 
+    /*
+     * ============================================================
+     * MANIFEST
+     * ============================================================
+     */
+
     manifest_ch = MAKE_MANIFEST_VALIDATE(
         init_done,
         file(params.input_table),
@@ -684,166 +326,39 @@ workflow {
 
     /*
      * ============================================================
-     * SPLIT MANIFEST → POR BIOSAMPLE
+     * SAMPLES CHANNEL
      * ============================================================
      */
 
     samples_ch = manifest_ch
         .splitCsv(header:true, sep:'\t')
         .map { row ->
-            tuple(row.biosample, file("${params.reads_dir}/${row.biosample}"))
+            tuple(row.biosample, file(params.reads_dir))
         }
 
     /*
      * ============================================================
-     * BLOCO 1 — PARALELO POR AMOSTRA
+     * BLOCO 1 — PER BIOSAMPLE
      * ============================================================
      */
 
-    fastqc_out    = FASTQC(samples_ch)
+    // Independente
+    fastqc_ch = FASTQC(samples_ch)
 
-    trim_out      = TRIMMOMATIC(samples_ch)
+    // Pré-processamento
+    trimmomatic_ch = TRIMMOMATIC(samples_ch)
 
-    kaiju_out     = KAIJU(trim_out)
+    // Após trimmomatic
+    kaiju_ch = KAIJU(trimmomatic_ch)
+    bwa_ch   = BWA(trimmomatic_ch)
 
-    bwa_out       = BWA(trim_out)
+    // Após BWA
+    delly_ch      = DELLY(bwa_ch)
+    lofreq_ch     = LOFREQ(bwa_ch)
+    gatk_gvcf_ch  = GATK_GVCF(bwa_ch)
+    gatk_vcf_ch   = GATK_VCF(bwa_ch)
 
-    delly_out     = DELLY(bwa_out)
+    // Após GATK_VCF
+    norm_ch = NORM(gatk_vcf_ch)
 
-    lofreq_out    = LOFREQ(bwa_out)
-
-    gatk_gvcf_out = GATK_GVCF(bwa_out)
-
-    gatk_vcf_out  = GATK_VCF(bwa_out)
-
-    norm_out      = NORM(gatk_vcf_out)
-
-    /*
-     * ---- SNPEFF depende de TODOS os chamadores ----
-     */
-
-    snpeff_trigger = lofreq_out
-        .join(gatk_gvcf_out)
-        .join(gatk_vcf_out)
-        .join(norm_out)
-
-    snpeff_out = SNPEFF(snpeff_trigger)
-
-    /*
-     * ---- Dependências específicas ----
-     */
-
-    tbdr_out   = TBDR_RCOV(gatk_gvcf_out)
-
-    ntm_trigger = lofreq_out.join(gatk_gvcf_out)
-    ntm_out     = NTM_FILTER(ntm_trigger)
-
-    lineage_out = LINEAGE(norm_out)
-
-    /*
-     * ============================================================
-     * SINCRONIZAÇÃO GLOBAL BLOCO 1
-     * ============================================================
-     */
-
-    block1_done = Channel
-        .merge(
-            snpeff_out,
-            tbdr_out,
-            ntm_out,
-            lineage_out,
-            delly_out
-        )
-        .collect()
-
-    /*
-     * ============================================================
-     * BLOCO 2 — GLOBAL
-     * ============================================================
-     */
-
-    cohort_out = COHORT(block1_done)
-
-    cohort_filter_out = COHORT_FILTER(cohort_out)
-
-    snp_matrix_out = SNP_MATRIX(cohort_filter_out)
-
-    transmission_out = TRANSMISSION(snp_matrix_out)
-
-    iqtree_out = IQTREE(snp_matrix_out)
-
-    /*
-     * ============================================================
-     * SINCRONIZAÇÃO GLOBAL BLOCO 2
-     * ============================================================
-     */
-
-    block2_done = Channel
-        .merge(
-            transmission_out,
-            iqtree_out
-        )
-        .collect()
-
-    /*
-     * ============================================================
-     * BLOCO 3
-     * ============================================================
-     */
-
-    mix_out = MIXINFECTION(
-        samples_ch.combine(block2_done)
-    )
-
-    resistance_tgt = RESISTANCE_TARGET(snpeff_out)
-
-    resistance_rep = RESISTANCE_REPORT(resistance_tgt)
-
-    /*
-     * ============================================================
-     * SINCRONIZAÇÃO GLOBAL BLOCO 3
-     * ============================================================
-     */
-
-    block3_done = Channel
-        .merge(
-            mix_out,
-            resistance_rep
-        )
-        .collect()
-
-    /*
-     * ============================================================
-     * BLOCO 4 — GLOBAL
-     * ============================================================
-     */
-
-    resistance_sum = RESISTANCE_SUMMARY(block3_done)
-
-    qc_sum = QC_SUMMARY(block3_done)
-
-    /*
-     * ============================================================
-     * SINCRONIZAÇÃO GLOBAL BLOCO 4
-     * ============================================================
-     */
-
-    block4_done = Channel
-        .merge(
-            resistance_sum,
-            qc_sum
-        )
-        .collect()
-
-    /*
-     * ============================================================
-     * BLOCO 5 — FINAL
-     * ============================================================
-     */
-
-    CLINICAL_REPORT(
-        samples_ch.combine(block4_done)
-    )
 }
-
-
