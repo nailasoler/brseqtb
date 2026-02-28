@@ -46,7 +46,6 @@ if [[ -f "$VCF_FILE" && -f "${VCF_FILE}.tbi" ]]; then
 fi
 
 echo "[RUN] DELLY for ${BIOSAMPLE}"
-echo "[INFO] Threads: ${THREADS}"
 echo "---------------------------------------------"
 
 RAW_BCF="${OUTPUT_DIR}/${BIOSAMPLE}_delly.bcf"
