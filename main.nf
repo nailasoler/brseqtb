@@ -10,6 +10,7 @@ params.run                = null
 params.add_kaiju_manually = false
 params.input_table        = "input/input_table.xlsx"
 params.reads_dir          = "reads"
+params.demo = false
 
 /*
  * ============================================================
@@ -378,7 +379,7 @@ process COHORT {
 
     input:
         val token
-        path manifest
+        tuple path(manifest), val(use_demo)
 
     output:
         val true
@@ -386,7 +387,12 @@ process COHORT {
     script:
     """
     cd "${projectDir}"
-    bash bin/cohort.sh ${manifest}
+
+    if [ "${use_demo}" = "true" ]; then
+        bash bin/cohort.sh ${manifest} --demo
+    else
+        bash bin/cohort.sh ${manifest}
+    fi
     """
 }
 
@@ -667,16 +673,21 @@ workflow {
         .collect()
         .map { true }
 
-    /*
+        /*
      * ============================================================
      * BLOCO 2 — COORTE
      * ============================================================
      */
 
+    // Passa flag --demo para o processo COHORT
+    cohort_input_ch = manifest_ch
+        .map { file -> tuple(file, params.demo) }
+
     cohort_ch = COHORT(
-    	bloco1_sync,
-    	manifest_ch
-	)
+        bloco1_sync,
+        cohort_input_ch
+    )
+
     cohort_filter_ch = COHORT_FILTER(cohort_ch)
 
     snp_matrix_ch = SNP_MATRIX(cohort_ch)
