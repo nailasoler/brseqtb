@@ -11,6 +11,7 @@ params.add_kaiju_manually = false
 params.input_table        = "input/input_table.xlsx"
 params.reads_dir          = "reads"
 params.demo = false
+params.module = null
 
 /*
  * ============================================================
@@ -627,32 +628,49 @@ workflow {
 
     // Independente
     fastqc_ch = FASTQC(samples_ch)
+    if (params.module == 'fastqc') return
 
     // Pré-processamento
     trimmomatic_ch = TRIMMOMATIC(samples_ch)
+    if (params.module == 'trimmomatic') return
 
     // Após trimmomatic
     kaiju_ch = KAIJU(trimmomatic_ch)
+    if (params.module == 'kaiju') return
+
     bwa_ch   = BWA(trimmomatic_ch)
+    if (params.module == 'bwa') return
 
     // Após BWA
     delly_ch      = DELLY(bwa_ch)
+    if (params.module == 'delly') return
+
     lofreq_ch     = LOFREQ(bwa_ch)
+    if (params.module == 'lofreq') return
+
     gatk_gvcf_ch  = GATK_GVCF(bwa_ch)
+    if (params.module == 'gatk_gvcf') return
+
     gatk_vcf_ch   = GATK_VCF(bwa_ch)
+    if (params.module == 'gatk_vcf') return
 
     // Após GATK_VCF
     norm_ch = NORM(gatk_vcf_ch)
+    if (params.module == 'norm') return
+
     tbdr_rcov_ch = TBDR_RCOV(gatk_gvcf_ch)
+    if (params.module == 'tbdr_rcov') return
 
     // Após NORM
     lineage_ch = LINEAGE(norm_ch)
+    if (params.module == 'lineage') return
     
-        // Após LOFREQ + GATK_GVCF
+    // Após LOFREQ + GATK_GVCF
     ntm_input_ch = lofreq_ch
         .join(gatk_gvcf_ch)
 
     ntm_filter_ch = NTM_FILTER(ntm_input_ch)
+    if (params.module == 'ntm_filter') return
 
     // SNPEFF após todos chamadores principais
     snpeff_input_ch = lofreq_ch
@@ -661,8 +679,9 @@ workflow {
         .join(norm_ch)
 
     snpeff_ch = SNPEFF(snpeff_input_ch)
+    if (params.module == 'snpeff') return
     
-        /*
+    /*
      * ============================================================
      * GLOBAL SYNC — FIM BLOCO 1
      * Espera TODAS biosamples finalizarem SNPEFF
@@ -673,7 +692,9 @@ workflow {
         .collect()
         .map { true }
 
-        /*
+}
+
+    /*
      * ============================================================
      * BLOCO 2 — COORTE
      * ============================================================
@@ -687,10 +708,13 @@ workflow {
         bloco1_sync,
         cohort_input_ch
     )
+    if (params.module == 'cohort') return
 
     cohort_filter_ch = COHORT_FILTER(cohort_ch)
+    if (params.module == 'cohort_filter') return
 
     snp_matrix_ch = SNP_MATRIX(cohort_ch)
+    if (params.module == 'snp_matrix') return
 
     /*
      * ============================================================
@@ -700,10 +724,12 @@ workflow {
      */
 
     transmission_ch = TRANSMISSION(snp_matrix_ch)
+    if (params.module == 'transmission') return
 
     iqtree_ch = IQTREE(snp_matrix_ch)
+    if (params.module == 'iqtree') return
     
-        /*
+    /*
      * ============================================================
      * GLOBAL SYNC — FIM BLOCO 2
      * Espera finalização completa de TRANSMISSION e IQTREE
@@ -728,14 +754,17 @@ workflow {
 
     // Independente
     mix_infection_ch = MIX_INFECTION(bloco3_samples_ch)
+    if (params.module == 'mix_infection') return
 
     // Resistance target
     resistance_target_ch = RESISTANCE_TARGET(bloco3_samples_ch)
+    if (params.module == 'resistance_target') return
 
     // Resistance report depende obrigatoriamente de resistance_target
     resistance_report_ch = RESISTANCE_REPORT(resistance_target_ch)
+    if (params.module == 'resistance_report') return
     
-        /*
+    /*
      * ============================================================
      * GLOBAL SYNC — FIM BLOCO 3
      * Espera TODAS biosamples finalizarem RESISTANCE_REPORT
@@ -745,7 +774,7 @@ workflow {
     bloco3_sync = resistance_report_ch
         .collect()
         .map { true }
-
+        
     /*
      * ============================================================
      * BLOCO 4 — COORTE (REPORTS GLOBAIS)
@@ -754,8 +783,10 @@ workflow {
      */
 
     resistance_summary_ch = RESISTANCE_SUMMARY(bloco3_sync)
+    if (params.module == 'resistance_summary') return
 
     qc_summary_ch = QC_SUMMARY(bloco3_sync)
+    if (params.module == 'qc_summary') return
 
     /*
      * ============================================================
@@ -781,5 +812,9 @@ workflow {
         .map { biosample, _ -> biosample }
 
     clinical_report_ch = CLINICAL_REPORT(clinical_samples_ch)
+    if (params.module == 'clinical_report') return
 
 }
+
+
+
