@@ -12,6 +12,7 @@ params.input_table        = "input/input_table.xlsx"
 params.reads_dir          = "reads"
 params.demo = false
 params.module = null  // Example: bwa, trimmomatic, cohort, etc.
+params.exclude = null
 
 /*
  * ============================================================
@@ -623,6 +624,25 @@ workflow {
 
     /*
      * ============================================================
+     * EXCLUSÕES PERMITIDAS (SOMENTE FULL PIPELINE)
+     * ============================================================
+     */
+
+    def excluded = params.exclude ?
+        params.exclude.split(',')*.trim() :
+        []
+
+    def allowed_exclusions = ['iqtree','transmission','clinical_report']
+
+    excluded.each {
+        if (!allowed_exclusions.contains(it)) {
+            error "Exclusão inválida: ${it}. Permitidos: ${allowed_exclusions}"
+        }
+    }
+
+
+    /*
+     * ============================================================
      * MODO MÓDULO (EXECUÇÃO ISOLADA)
      * ============================================================
      */
@@ -631,105 +651,36 @@ workflow {
 
         switch (params.module) {
 
-            case 'fastqc':
-                FASTQC(samples_ch)
-                break
-
-            case 'trimmomatic':
-                TRIMMOMATIC(samples_ch)
-                break
-
-            case 'kaiju':
-                KAIJU(samples_ch)
-                break
-
-            case 'bwa':
-                BWA(samples_ch)
-                break
-
-            case 'delly':
-                DELLY(samples_ch)
-                break
-
-            case 'lofreq':
-                LOFREQ(samples_ch)
-                break
-
-            case 'gatk_gvcf':
-                GATK_GVCF(samples_ch)
-                break
-
-            case 'gatk_vcf':
-                GATK_VCF(samples_ch)
-                break
-
-            case 'norm':
-                NORM(samples_ch)
-                break
-
-            case 'tbdr_rcov':
-                TBDR_RCOV(samples_ch)
-                break
-
-            case 'lineage':
-                LINEAGE(samples_ch)
-                break
-
-            case 'ntm_filter':
-                NTM_FILTER(samples_ch)
-                break
-
-            case 'snpeff':
-                SNPEFF(samples_ch)
-                break
+            case 'fastqc': FASTQC(samples_ch); break
+            case 'trimmomatic': TRIMMOMATIC(samples_ch); break
+            case 'kaiju': KAIJU(samples_ch); break
+            case 'bwa': BWA(samples_ch); break
+            case 'delly': DELLY(samples_ch); break
+            case 'lofreq': LOFREQ(samples_ch); break
+            case 'gatk_gvcf': GATK_GVCF(samples_ch); break
+            case 'gatk_vcf': GATK_VCF(samples_ch); break
+            case 'norm': NORM(samples_ch); break
+            case 'tbdr_rcov': TBDR_RCOV(samples_ch); break
+            case 'lineage': LINEAGE(samples_ch); break
+            case 'ntm_filter': NTM_FILTER(samples_ch); break
+            case 'snpeff': SNPEFF(samples_ch); break
 
             case 'cohort':
-
                 cohort_input_ch = manifest_ch
                     .map { file -> tuple(file, params.demo) }
-
                 COHORT(Channel.value(true), cohort_input_ch)
                 break
 
-            case 'cohort_filter':
-                COHORT_FILTER(Channel.value(true))
-                break
-
-            case 'snp_matrix':
-                SNP_MATRIX(Channel.value(true))
-                break
-
-            case 'transmission':
-                TRANSMISSION(Channel.value(true))
-                break
-
-            case 'iqtree':
-                IQTREE(Channel.value(true))
-                break
-
-            case 'mix_infection':
-                MIX_INFECTION(samples_ch)
-                break
-
-            case 'resistance_target':
-                RESISTANCE_TARGET(samples_ch)
-                break
-
-            case 'resistance_report':
-                RESISTANCE_REPORT(samples_ch)
-                break
-
-            case 'resistance_summary':
-                RESISTANCE_SUMMARY(Channel.value(true))
-                break
-
-            case 'qc_summary':
-                QC_SUMMARY(Channel.value(true))
-                break
-
-            case 'clinical_report':
-                CLINICAL_REPORT(samples_ch)
-                break
+            case 'cohort_filter': COHORT_FILTER(Channel.value(true)); break
+            case 'snp_matrix': SNP_MATRIX(Channel.value(true)); break
+            case 'transmission': TRANSMISSION(Channel.value(true)); break
+            case 'iqtree': IQTREE(Channel.value(true)); break
+            case 'mix_infection': MIX_INFECTION(samples_ch); break
+            case 'resistance_target': RESISTANCE_TARGET(samples_ch); break
+            case 'resistance_report': RESISTANCE_REPORT(samples_ch); break
+            case 'resistance_summary': RESISTANCE_SUMMARY(Channel.value(true)); break
+            case 'qc_summary': QC_SUMMARY(Channel.value(true)); break
+            case 'clinical_report': CLINICAL_REPORT(samples_ch); break
 
             default:
                 error "Módulo inválido: ${params.module}"
@@ -784,13 +735,31 @@ workflow {
         cohort_filter_ch = COHORT_FILTER(cohort_ch)
         snp_matrix_ch    = SNP_MATRIX(cohort_filter_ch)
 
-        transmission_ch = TRANSMISSION(snp_matrix_ch)
-        iqtree_ch       = IQTREE(snp_matrix_ch)
+        def transmission_ch = Channel.empty()
+        def iqtree_ch       = Channel.empty()
 
-        bloco2_sync = transmission_ch
-            .join(iqtree_ch)
-            .collect()
-            .map { true }
+        if (!excluded.contains('transmission')) {
+            transmission_ch = TRANSMISSION(snp_matrix_ch)
+        }
+
+        if (!excluded.contains('iqtree')) {
+            iqtree_ch = IQTREE(snp_matrix_ch)
+        }
+
+        def bloco2_barrier = []
+
+        if (!excluded.contains('transmission'))
+            bloco2_barrier << transmission_ch
+
+        if (!excluded.contains('iqtree'))
+            bloco2_barrier << iqtree_ch
+
+        bloco2_sync = bloco2_barrier
+            ? bloco2_barrier
+                .reduce { a, b -> a.join(b) }
+                .collect()
+                .map { true }
+            : snp_matrix_ch.collect().map { true }
 
 
         // BLOCO 3
@@ -820,8 +789,9 @@ workflow {
             .combine(bloco4_sync)
             .map { biosample, _ -> biosample }
 
-        clinical_report_ch = CLINICAL_REPORT(clinical_samples_ch)
+        if (!excluded.contains('clinical_report')) {
+            clinical_report_ch = CLINICAL_REPORT(clinical_samples_ch)
+        }
     }
-
 }
 
