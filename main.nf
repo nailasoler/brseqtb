@@ -723,9 +723,8 @@ workflow {
         snpeff_ch = SNPEFF(snpeff_input_ch)
 
         bloco1_sync = snpeff_ch.collect().map { true }
-
-
-        // BLOCO 2
+        
+                // BLOCO 2
 
         cohort_input_ch = manifest_ch
             .map { file -> tuple(file, params.demo) }
@@ -735,31 +734,38 @@ workflow {
         cohort_filter_ch = COHORT_FILTER(cohort_ch)
         snp_matrix_ch    = SNP_MATRIX(cohort_filter_ch)
 
-        def transmission_ch = Channel.empty()
-        def iqtree_ch       = Channel.empty()
+        def barrier_channels = []
 
         if (!excluded.contains('transmission')) {
             transmission_ch = TRANSMISSION(snp_matrix_ch)
+            barrier_channels << transmission_ch
         }
 
         if (!excluded.contains('iqtree')) {
             iqtree_ch = IQTREE(snp_matrix_ch)
+            barrier_channels << iqtree_ch
         }
 
-        def bloco2_barrier = []
+        if (barrier_channels.size() == 2) {
 
-        if (!excluded.contains('transmission'))
-            bloco2_barrier << transmission_ch
-
-        if (!excluded.contains('iqtree'))
-            bloco2_barrier << iqtree_ch
-
-        bloco2_sync = bloco2_barrier
-            ? bloco2_barrier
-                .reduce { a, b -> a.join(b) }
+            bloco2_sync = barrier_channels[0]
+                .join(barrier_channels[1])
                 .collect()
                 .map { true }
-            : snp_matrix_ch.collect().map { true }
+
+        } else if (barrier_channels.size() == 1) {
+
+            bloco2_sync = barrier_channels[0]
+                .collect()
+                .map { true }
+
+        } else {
+
+            // ambos excluídos
+            bloco2_sync = snp_matrix_ch
+                .collect()
+                .map { true }
+        }
 
 
         // BLOCO 3
