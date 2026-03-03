@@ -628,14 +628,9 @@ workflow {
      * ============================================================
      */
 
-    def excluded = []
-
-	if (params.exclude) {
-	    excluded = params.exclude
-		.replaceAll('\\s','')   // remove espaços
-		.split(',')
-		.findAll { it }
-	}
+    def excluded = params.exclude ?
+        params.exclude.split(',')*.trim() :
+        []
 
     def allowed_exclusions = ['iqtree','transmission','clinical_report']
 
