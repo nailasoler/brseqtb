@@ -727,28 +727,28 @@ workflow {
         
           /*
          * ============================================================
-         * BLOCO 1 — SINCRONIZAÇÃO
+         * BLOCO 1 — SINCRONIZAÇÃO CORRETA
          * ============================================================
          */
 
-        barrier_channels = []
+        bloco1_barrier_channels = []
 
-        barrier_channels << snpeff_ch
+        bloco1_barrier_channels << snpeff_ch
 
         if (!excluded.contains('kaiju')) {
-            barrier_channels << kaiju_ch
+            bloco1_barrier_channels << kaiju_ch
         }
 
-        if (barrier_channels.size() == 2) {
+        if (bloco1_barrier_channels.size() == 2) {
 
-            bloco1_sync = barrier_channels[0]
-                .join(barrier_channels[1])
+            bloco1_sync = bloco1_barrier_channels[0]
+                .join(bloco1_barrier_channels[1])
                 .collect()
                 .map { true }
 
         } else {
 
-            bloco1_sync = barrier_channels[0]
+            bloco1_sync = bloco1_barrier_channels[0]
                 .collect()
                 .map { true }
         }
