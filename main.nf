@@ -725,7 +725,25 @@ workflow {
 
         snpeff_ch = SNPEFF(snpeff_input_ch)
 
-        bloco1_sync = snpeff_ch.collect().map { true }
+        def bloco1_barrier = [snpeff_ch]
+
+	if (!excluded.contains('kaiju')) {
+	    bloco1_barrier << kaiju_ch
+	}
+
+	if (bloco1_barrier.size() == 2) {
+
+	    bloco1_sync = bloco1_barrier[0]
+		.join(bloco1_barrier[1])
+		.collect()
+		.map { true }
+
+	} else {
+
+	    bloco1_sync = bloco1_barrier[0]
+		.collect()
+		.map { true }
+	}
 
 
         // BLOCO 2
