@@ -422,7 +422,7 @@ brseqtb --exclude transmission,iqtree
 
 | Profile  | Intended Use             | CPU Strategy         |
 | -------- | ------------------------ | -------------------- |
-| standard | Local laptop/workstation | Auto-scaled (~65%)   |
+| standard (default) | Local laptop/workstation | Auto-scaled (~65%)   |
 | lowmem | Low-resource machines (e.g., 8GB RAM) | Conservative, limited parallelism   |
 | hpc      | Cluster environments     | Scheduler-controlled |
 
