@@ -308,7 +308,7 @@ brseqtb/
 ## Running
 
 ### Full Pipeline (Default Execution)
-Runs the complete workflow from pre-processing to final clinical reports, includin phylogeny and transmission.
+Runs the complete workflow from pre-processing to final clinical reports, including phylogeny and transmission.
 
 ```bash
 brseqtb
