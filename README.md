@@ -1,18 +1,85 @@
-# brseqtb
+# BrSeqTB — A pipeline for antimicrobial resistance inference from Mycobacterium tuberculosis WGS
 
-**brseqtb** is a modular Nextflow pipeline for *Mycobacterium tuberculosis* whole-genome sequencing analysis, with a clear separation between:
+**BrSeqTB** is a fully modular Nextflow DSL2 pipeline designed for comprehensive Mycobacterium tuberculosis whole-genome sequencing (WGS) analysis. Starting from Illumina paired-end FASTQ files, it produces analysis-ready outputs through an end-to-end workflow that includes:
 
-- **One-time environment preparation (INIT stage)**
-- **Per-sample analytical workflows**
+- **Quality control and reporting**
+- **Taxonomic contamination screening (Kaiju)**
+- **Reference alignment (BWA-MEM)**
+- **Multi-caller variant detection (GATK HaplotypeCaller, LoFreq, Delly)**
+- **Variant functional annotation (SnpEff)**
+- **Drug-resistance prediction based on the WHO catalogue**
+- **Mixed infection inference**
+- **Phylogenetic reconstruction and transmission network inference**
+- **Variant summary (per sample and cohort-level)**
+- **Clinical report**
 
-# brseqtb — Installation and Execution Guide
+BrSeqTB supports scalable execution (local, HPC, or cloud), environment isolation via Conda, and modular execution of individual workflow components. The pipeline generates standardized, clinically interpretable outputs, including integrated QC reports, resistance summaries, and cohort-level analyses — enabling robust genomic surveillance and research applications in tuberculosis.
+
+## BrSeqTB Workflow DAG
+
+```
+INITIALIZATION
+ ├─ KAIJU_DB
+ ├─ OMS_CATALOG
+ ├─ BWA_REF
+ ├─ GATK_DICT
+ └─ SNPEFF_DB
+        ↓
+MAKE_MANIFEST_VALIDATE
+        ↓
+SAMPLES (fan-out per biosample)
+
+BLOCK 1 — PER BIOSAMPLE
+
+SAMPLE
+ ├─ FASTQC
+ └─ TRIMMOMATIC
+       ├─ KAIJU
+       └─ BWA
+            ├─ DELLY
+            ├─ LOFREQ
+            ├─ GATK_GVCF ── TBDR_RCOV
+            ├─ GATK_VCF ── NORM ── LINEAGE
+            ├─ LOFREQ + GATK_GVCF ── NTM_FILTER
+            └─ LOFREQ + GATK_GVCF + GATK_VCF + NORM ── SNPEFF
+
+BLOCK 2 — COHORT LEVEL
+
+COHORT
+   ↓
+COHORT_FILTER
+   ↓
+SNP_MATRIX
+   ├─ TRANSMISSION
+   └─ IQTREE
+
+BLOCK 3 — PER BIOSAMPLE
+
+SAMPLE
+ ├─ MIX_INFECTION
+ ├─ RESISTANCE_TARGET
+ │      ↓
+ │  RESISTANCE_REPORT
+
+BLOCK 4 — GLOBAL REPORTS
+
+ ├─ RESISTANCE_SUMMARY
+ └─ QC_SUMMARY
+
+FINAL — PER BIOSAMPLE
+
+SAMPLE
+ └─ CLINICAL_REPORT
+
+```
+
+# BrSeqTB — Installation and Execution Guide
 
 ## Requirements
 
-The following tools must be installed:
-
-- **Nextflow** (≥ 24.x recommended)  
-- **Conda (Miniconda)**  
+- Nextflow (≥ 25.10.2)
+- Conda (Miniconda)
+- Java (OpenJDK 17) will be automatically installed via Conda if not available system-wide.
 
 Linux or macOS is recommended.
 
@@ -20,22 +87,7 @@ Linux or macOS is recommended.
 
 # Installation
 
-## 1️⃣ Install Nextflow
-
-```bash
-curl -s https://get.nextflow.io | bash
-sudo mv nextflow /usr/local/bin/
-```
-
-Verify installation:
-
-```bash
-nextflow -version
-```
-
----
-
-## 2️⃣ Install Miniconda
+##1️⃣ Install Miniconda
 
 Download and install Miniconda:
 
@@ -101,7 +153,24 @@ This step is required to allow automated environment creation by Nextflow.
 
 ---
 
-## 3️⃣ Clone the repository
+##2️⃣ Install Nextflow
+
+
+---
+
+```bash
+curl -s https://get.nextflow.io | bash
+sudo mv nextflow /usr/local/bin/
+```
+
+Verify installation:
+
+```bash
+nextflow -version
+```
+
+
+##3️⃣ Clone the repository
 
 ```bash
 git clone https://github.com/nailasoler/brseqtb.git
