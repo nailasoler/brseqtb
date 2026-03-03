@@ -388,7 +388,7 @@ brseqtb --exclude transmission,iqtree
 | `delly`              | Structural variant detection (Delly).                 |
 | `lofreq`             | Low-frequency variant detection (LoFreq).             |
 | `gatk_gvcf`          | Variant calling in GVCF mode (GATK HaplotypeCaller).  |
-| `gatk_vcf`           | Joint genotyping and VCF generation (GATK).           |
+| `gatk_vcf`           | Variant calling in VCF mode (GATK HaplotypeCaller)    |
 | `norm`               | Variant normalization and processing.                 |
 | `tbdr_rcov`          | Coverage calculation over TB drug-resistance regions. |
 | `lineage`            | Lineage assignment based on variant data.             |
