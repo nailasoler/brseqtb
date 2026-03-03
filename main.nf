@@ -632,7 +632,7 @@ workflow {
         params.exclude.split(',')*.trim() :
         []
 
-    def allowed_exclusions = ['iqtree','transmission','clinical_report']
+    def allowed_exclusions = ['kaiju','iqtree','transmission','clinical_report']
 
     excluded.each {
         if (!allowed_exclusions.contains(it)) {
@@ -699,7 +699,10 @@ workflow {
         fastqc_ch = FASTQC(samples_ch)
         trimmomatic_ch = TRIMMOMATIC(samples_ch)
 
-        kaiju_ch = KAIJU(trimmomatic_ch)
+        if (!excluded.contains('kaiju')) {
+            kaiju_ch = KAIJU(trimmomatic_ch)
+        }
+
         bwa_ch   = BWA(trimmomatic_ch)
 
         delly_ch      = DELLY(bwa_ch)
@@ -723,8 +726,9 @@ workflow {
         snpeff_ch = SNPEFF(snpeff_input_ch)
 
         bloco1_sync = snpeff_ch.collect().map { true }
-        
-                // BLOCO 2
+
+
+        // BLOCO 2
 
         cohort_input_ch = manifest_ch
             .map { file -> tuple(file, params.demo) }
@@ -761,7 +765,6 @@ workflow {
 
         } else {
 
-            // ambos excluídos
             bloco2_sync = snp_matrix_ch
                 .collect()
                 .map { true }
@@ -800,4 +803,5 @@ workflow {
         }
     }
 }
+
 
