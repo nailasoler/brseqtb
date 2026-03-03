@@ -237,6 +237,74 @@ source ~/.bashrc
 After installation, the brseqtb command is available in your system.
 All executions must be run from the project directory containing your input/ and reads/ folders.
 
+## Input Requirements
+
+BrSeqTB requires two main inputs before execution:
+
+#### 1️ `input/input_table.xlsx`
+
+The input table **must contain a column with biosample IDs** that exactly match the FASTQ file prefixes.
+
+* **Biosample ID** → **Required**
+* **Clinical metadata (e.g., patient info, drug resistance, location, etc.)** → Optional
+
+Clinical information is not mandatory for pipeline execution, but if provided, it will be incorporated into downstream reports (e.g., resistance summary and clinical report).
+
+The file must be located at:
+
+```
+input/input_table.xlsx
+```
+
+---
+
+#### 2️ FASTQ Files in `reads/` Directory
+
+All sequencing reads must be placed inside the `reads/` directory:
+
+```
+reads/
+```
+
+Files must follow the **strict Illumina paired-end naming convention**:
+
+```
+biosample_S1_L001_R1_001.fastq.gz
+biosample_S1_L001_R2_001.fastq.gz
+```
+
+Naming structure:
+
+```
+<BIOSAMPLE>_S<NUM>_L<NNN>_R1_001.fastq.gz
+<BIOSAMPLE>_S<NUM>_L<NNN>_R2_001.fastq.gz
+```
+
+Explanation:
+
+* `<BIOSAMPLE>` → Must exactly match the biosample ID in `input_table.xlsx`
+* `S<NUM>` → Sample number
+* `L<NNN>` → Lane number
+* `R1/R2` → Read direction (forward/reverse)
+* `_001` → File index
+* `.fastq.gz` → Gzipped FASTQ format
+
+⚠ The pipeline performs strict validation. Any mismatch between FASTQ filenames and biosample IDs in the input table will result in execution failure.
+
+---
+
+Correct structure example:
+
+```
+brseqtb/
+├── input/
+│   └── input_table.xlsx
+├── reads/
+│   ├── 1827-22_S1_L001_R1_001.fastq.gz
+│   └── 1827-22_S1_L001_R2_001.fastq.gz
+```
+
+
 ## Running
 
 ### Full Pipeline (Default Execution)
