@@ -724,26 +724,37 @@ workflow {
             .join(norm_ch)
 
         snpeff_ch = SNPEFF(snpeff_input_ch)
+        
+          /*
+         * ============================================================
+         * BLOCO 1 — SINCRONIZAÇÃO
+         * ============================================================
+         */
 
+        barrier_channels = []
+
+        barrier_channels << snpeff_ch
 
         if (!excluded.contains('kaiju')) {
+            barrier_channels << kaiju_ch
+        }
 
-            // Sincroniza SNPEFF e KAIJU por biosample
-            bloco1_barrier = snpeff_ch
-                .join(kaiju_ch)
+        if (barrier_channels.size() == 2) {
+
+            bloco1_sync = barrier_channels[0]
+                .join(barrier_channels[1])
+                .collect()
+                .map { true }
 
         } else {
 
-            // Se kaiju estiver excluído, apenas SNPEFF define a barreira
-            bloco1_barrier = snpeff_ch
+            bloco1_sync = barrier_channels[0]
+                .collect()
+                .map { true }
         }
 
-        // Aguarda todos os biosamples finalizarem antes de avançar
-        bloco1_sync = bloco1_barrier
-            .collect()
-            .map { true }
 
-
+        
         // BLOCO 2
 
         cohort_input_ch = manifest_ch
