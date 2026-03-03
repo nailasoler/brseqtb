@@ -299,15 +299,15 @@ brseqtb --exclude transmission,iqtree
 
 ## Parameters (summary)
 
-| Parameter  |   Description            |
-| --------   | ------------------------ |
-| --add_kaiju_manually   | If true, skips automatic Kaiju database download and expects the database to be already present locally in database/kaiju. |
-| --demo        | Enables demo mode for cohort-level steps ().     |
-| --modules        | Executes a single workflow module instead of the full pipeline. Accepts any valid module name (e.g., bwa, lofreq, cohort, clinical_report). Multiple values must be comma-separated.    |
-| --exclude        | Excludes optional modules during full pipeline execution. Allowed values: kaiju, transmission, iqtree, clinical_report. Multiple values must be comma-separated.    |
-| --profile standard        | Default execution profile. Runs locally using ~65% of available CPUs with dynamic parallelization and full Conda environment isolation.    |
-| -profile lowmem        | Safe execution mode for low-resource machines (e.g., 8GB RAM laptops). Reduces CPU usage and memory allocation to prevent crashes.    |
-| -profile hpc        | HPC execution profile using SLURM scheduler. Designed for cluster environments with higher CPU and memory allocation.    |
+| Parameter    |   Description            |
+| --------     | ------------------------ |
+| --add_kaiju_manually     | If true, skips automatic Kaiju database download and expects the database to be already present locally in database/kaiju. |
+| --demo          | Enables demo mode for cohort-level steps ().     |
+| --modules          | Executes a single workflow module instead of the full pipeline. Accepts any valid module name (e.g., bwa, lofreq, cohort, clinical_report). Multiple values must be comma-separated.    |
+| --exclude          | Excludes optional modules during full pipeline execution. Allowed values: kaiju, transmission, iqtree, clinical_report. Multiple values must be comma-separated.    |
+| --profile standard          | Default execution profile. Runs locally using ~65% of available CPUs with dynamic parallelization and full Conda environment isolation.    |
+| -profile lowmem          | Safe execution mode for low-resource machines (e.g., 8GB RAM laptops). Reduces CPU usage and memory allocation to prevent crashes.    |
+| -profile hpc          | HPC execution profile using SLURM scheduler. Designed for cluster environments with higher CPU and memory allocation.    |
 
 ### Available --module Options
 
