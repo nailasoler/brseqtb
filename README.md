@@ -230,14 +230,111 @@ This step enables automated environment creation by Nextflow.
 ```bash
 git clone https://github.com/nailasoler/brseqtb.git
 cd brseqtb
+bash install.sh
+source ~/.bashrc
 ```
+
+After installation, the brseqtb command is available in your system.
+All executions must be run from the project directory containing your input/ and reads/ folders.
 
 ## Running
 
+### Full Pipeline (Default Execution)
+Runs the complete workflow from pre-processing to final clinical reports, includin phylogeny and transmission.
 
+```bash
+brseqtb
+```
+### Run a Specific Module
+Executes only a single module.
+
+```bash
+brseqtb --module <module_name>
+```
+Example:
+
+```bash
+brseqtb --module fastqc
+brseqtb --module trimmomatic
+```
+
+### Exclude Optional Modules
+Some modules can be excluded during full pipeline execution:
+
+```bash
+brseqtb --exclude <module_name>
+```
+Example:
+
+```bash
+brseqtb --exclude kaiju
+brseqtb --exclude transmission,iqtree
+```
+> ⚠ **Important:**
+>
+> * `--exclude` accepts multiple modules separated by commas **without spaces**.
+> * `--module` accepts **only one module at a time** (do not use commas).
+>
+> ✔ Correct:
+> `--exclude transmission,iqtree`
+> `--module bwa`
+>
+> ✘ Incorrect:
+> `--exclude transmission, iqtree`
+> `--module bwa,lofreq`
 
 ---
 
+## Parameters (summary)
+
+| Parameter  |   Description            |
+| --------   | ------------------------ |
+| --add_kaiju_manually   | If true, skips automatic Kaiju database download and expects the database to be already present locally in database/kaiju. |
+| --demo        | Enables demo mode for cohort-level steps ().     |
+| --modules        | Executes a single workflow module instead of the full pipeline. Accepts any valid module name (e.g., bwa, lofreq, cohort, clinical_report). Multiple values must be comma-separated.    |
+| --exclude        | Excludes optional modules during full pipeline execution. Allowed values: kaiju, transmission, iqtree, clinical_report. Multiple values must be comma-separated.    |
+| --profile standard        | Default execution profile. Runs locally using ~65% of available CPUs with dynamic parallelization and full Conda environment isolation.    |
+| -profile lowmem        | Safe execution mode for low-resource machines (e.g., 8GB RAM laptops). Reduces CPU usage and memory allocation to prevent crashes.    |
+| -profile hpc        | HPC execution profile using SLURM scheduler. Designed for cluster environments with higher CPU and memory allocation.    |
+
+### Available --module Options
+
+| Module Name          | Description                                           |
+| -------------------- | ----------------------------------------------------- |
+| `fastqc`             | Raw read quality control (FastQC).                    |
+| `trimmomatic`        | Adapter trimming and read filtering.                  |
+| `kaiju`              | Taxonomic contamination screening (Kaiju).            |
+| `bwa`                | Reference alignment using BWA-MEM.                    |
+| `delly`              | Structural variant detection (Delly).                 |
+| `lofreq`             | Low-frequency variant detection (LoFreq).             |
+| `gatk_gvcf`          | Variant calling in GVCF mode (GATK HaplotypeCaller).  |
+| `gatk_vcf`           | Joint genotyping and VCF generation (GATK).           |
+| `norm`               | Variant normalization and processing.                 |
+| `tbdr_rcov`          | Coverage calculation over TB drug-resistance regions. |
+| `lineage`            | Lineage assignment based on variant data.             |
+| `ntm_filter`         | Non-tuberculous mycobacteria filtering.               |
+| `snpeff`             | Functional annotation of variants (SnpEff).           |
+| `cohort`             | Cohort-level variant aggregation.                     |
+| `cohort_filter`      | Cohort-level variant filtering.                       |
+| `snp_matrix`         | SNP matrix generation for downstream analysis.        |
+| `transmission`       | Transmission network inference.                       |
+| `iqtree`             | Phylogenetic tree reconstruction (IQ-TREE).           |
+| `mix_infection`      | Mixed infection inference per sample.                 |
+| `resistance_target`  | Drug-resistance mutation identification per sample.   |
+| `resistance_report`  | Per-sample resistance report generation.              |
+| `resistance_summary` | Cohort-level resistance summary.                      |
+| `qc_summary`         | Global QC summary report.                             |
+| `clinical_report`    | Final per-sample clinical report generation.          |
+
+
+### Available --exclude Options
+
+| Module Name       | Description                                                                 |
+| ----------------- | --------------------------------------------------------------------------- |
+| `kaiju`           | Skips taxonomic contamination screening (Kaiju) during per-sample analysis. |
+| `transmission`    | Skips transmission network inference at the cohort level.                   |
+| `iqtree`          | Skips phylogenetic tree reconstruction (IQ-TREE).                           |
+| `clinical_report` | Skips final per-sample clinical report generation.                          |
 
 ---
 
@@ -246,11 +343,10 @@ cd brseqtb
 | Profile  | Intended Use             | CPU Strategy         |
 | -------- | ------------------------ | -------------------- |
 | standard | Local laptop/workstation | Auto-scaled (~65%)   |
+| lowmem | Low-resource machines (e.g., 8GB RAM) | Conservative, limited parallelism   |
 | hpc      | Cluster environments     | Scheduler-controlled |
 
-
-## Running on HPC (Scheduler-Driven)
-
+---
 
 ## Environment Creation
 
