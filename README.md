@@ -77,9 +77,9 @@ SAMPLE
 
 ## Requirements
 
-- Nextflow (≥ 25.10.2)
-- Conda (Miniconda)
-- Java (OpenJDK 17) will be automatically installed via Conda if not available system-wide.
+- **Java (OpenJDK 17)**
+- **Nextflow (≥ 25.10.2)**
+- **Micromamba** (used by Nextflow to create environments)
 
 Linux or macOS is recommended.
 
@@ -87,76 +87,34 @@ Linux or macOS is recommended.
 
 # Installation
 
-##1️⃣ Install Miniconda
+## 1️⃣ Install Java (OpenJDK 17)
 
-Download and install Miniconda:
+Java is required to run Nextflow.
+
+### Ubuntu/Debian
 
 ```bash
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh
+sudo apt update
+sudo apt install openjdk-17-jdk -y
 ```
 
-During installation:
-
-- Accept the default installation path (`~/miniconda3`)
-- You may choose **not** to auto-activate the base environment
-
----
-
-If you answered "yes" to `conda init` during installation,
-you do NOT need to run `conda init` again.
-
-If you answered "no" to `conda init` during installation, follow the steps below. 
-
-### Initialize Conda (Required for Nextflow)
-
-Nextflow runs in non-interactive shells.  
-To ensure `conda` is available system-wide, initialize it:
+### macOS (Homebrew)
 
 ```bash
-conda init
-```
-
-Then reload your shell:
-
-```bash
-source ~/.bashrc
-```
-
-If you prefer **not** to auto-activate the base environment at terminal startup:
-
-```bash
-conda config --set auto_activate_base false
+brew install openjdk@17
 ```
 
 Verify installation:
 
 ```bash
-which conda
-conda --version
+java -version
 ```
 
----
-
-### ⚠ Important — Accept Conda Terms of Service
-
-Recent versions of Conda require accepting the Anaconda channel Terms of Service before creating environments in non-interactive mode (e.g., when running Nextflow).
-
-Run the following commands **once per machine**:
-
-```bash
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
-conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
-```
-
-This step is required to allow automated environment creation by Nextflow.
+You should see version 17.
 
 ---
 
-##2️⃣ Install Nextflow
-
-
----
+## 2️⃣ Install Nextflow
 
 ```bash
 curl -s https://get.nextflow.io | bash
@@ -169,40 +127,135 @@ Verify installation:
 nextflow -version
 ```
 
+---
 
-##3️⃣ Clone the repository
+---
+
+## 3️⃣ Install Conda (Miniconda Recommended)
+
+BrSeqTB uses **Conda** to automatically create the software environment defined in:
+
+```
+envs/brseqtb.yml
+```
+
+We recommend installing **Miniconda**, a lightweight Conda distribution.
+
+### Install Miniconda
+
+Download and install:
+
+```bash
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh
+```
+
+### During Installation
+
+When running the Miniconda installer:
+
+- Accept the license agreement
+- Accept the default installation path (`~/miniconda3`)
+- When prompted:
+
+  ```
+  Proceed with initialization? [yes|no]
+  ```
+
+  Type **`yes`**.
+
+  This step is important because it ensures that `conda` is added to your shell environment and is available to Nextflow.
+
+
+Restart your terminal or run:
+
+```bash
+source ~/.bashrc
+```
+
+At this point, Conda is correctly configured and available system-wide.
+
+---
+
+### (Optional) Disable Automatic Base Activation
+
+By default, Conda activates the `base` environment every time you open a new terminal.
+
+If you prefer not to auto-activate `base`, run:
+
+```bash
+conda config --set auto_activate_base false
+```
+
+Then reload your shell:
+
+```bash
+source ~/.bashrc
+```
+
+This keeps Conda available to Nextflow while preventing automatic activation of the `base` environment.
+
+---
+
+### Verify Installation
+
+```bash
+which conda
+conda --version
+```
+
+You should see the path to `miniconda3` and a Conda version number.
+
+---
+
+## ⚠ Important — Accept Conda Terms of Service
+
+Recent versions of Conda require accepting the Anaconda channel Terms of Service before creating environments in non-interactive mode (such as when running Nextflow).
+
+If you do not accept these terms, environment creation may fail.
+
+Run the following commands **once per machine**:
+
+```bash
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+```
+
+This step enables automated environment creation by Nextflow.
+
+---
+
+## 4️⃣ Clone the Repository
 
 ```bash
 git clone https://github.com/nailasoler/brseqtb.git
 cd brseqtb
 ```
 
+## Running
+
+
+
 ---
 
-````markdown
-# Running brseqtb (Default: Auto-Scaled Local)
 
-Run the pipeline:
+---
 
-```bash
-nextflow run main.nf
-````
+## Profiles Summary
 
-By default, brseqtb uses the `standard` profile, which automatically detects available CPUs, uses approximately 65% of the machine capacity, balances threads per process and parallel samples, and prevents system overload on laptops and workstations. No profile specification is required for local execution.
+| Profile  | Intended Use             | CPU Strategy         |
+| -------- | ------------------------ | -------------------- |
+| standard | Local laptop/workstation | Auto-scaled (~65%)   |
+| hpc      | Cluster environments     | Scheduler-controlled |
+
 
 ## Running on HPC (Scheduler-Driven)
 
-To run on an HPC cluster (e.g., SLURM):
 
-```bash
-nextflow run main.nf -profile hpc
-```
-
-The `hpc` profile does not auto-detect CPU percentage, fully respects scheduler resource allocation, uses declared `cpus` and `memory` per process, and follows best practices for cluster environments. You may need to adjust the executor (e.g., `slurm`, `pbs`, etc.) in `nextflow.config` to match your HPC system.
-
-## Environment Creation (First Run)
+## Environment Creation
 
 On first execution, Nextflow will automatically create the Conda environment defined in `envs/brseqtb.yml`. The environment will be stored in `~/.nextflow_conda_cache/`. Subsequent runs will reuse the cached environment.
+
 
 ## Optional: Clean Environment and Work Directory
 
@@ -220,27 +273,3 @@ Then rerun:
 nextflow run main.nf
 ```
 
-## Profiles Summary
-
-| Profile  | Intended Use             | CPU Strategy         |
-| -------- | ------------------------ | -------------------- |
-| standard | Local laptop/workstation | Auto-scaled (~65%)   |
-| hpc      | Cluster environments     | Scheduler-controlled |
-
-## Notes
-
-The pipeline is idempotent. Databases and indexes are not rebuilt if already present. Environments are cached under `~/.nextflow_conda_cache/`. Logs are generated under `logs/`. Outputs are published in the project root and module-specific directories. Resource allocation scales automatically in local mode. HPC execution strictly respects scheduler resource allocation.
-
-
----
-
-This setup uses **only Conda** as the environment manager and matches the current `nextflow.config`.
-
-
-# Notes
-
-- The pipeline is idempotent.
-- Databases and indexes are not rebuilt if already present.
-- Environments are cached under `work/conda/`.
-- Logs are generated under `logs/`.
-- Outputs are published in the project root and module-specific directories.
