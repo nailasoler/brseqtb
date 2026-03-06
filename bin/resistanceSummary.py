@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 # ============================================================
 # Summarize TB resistance profiles into a single master table
@@ -22,17 +21,11 @@ import os
 import pandas as pd
 
 # ============================================================
-# PROJECT DIR (script always lives in bin/)
-# ============================================================
-
-PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
-# ============================================================
 # CONFIG
 # ============================================================
 
-INPUT_DIR = os.path.join(PROJECT_DIR, "results", "resistance")
-OUTPUT_DIR = os.path.join(PROJECT_DIR, "results")
+INPUT_DIR = "results/resistance"
+OUTPUT_DIR = "results"
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "resistance_summary.xlsx")
 
 # ============================================================

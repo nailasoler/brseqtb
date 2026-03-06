@@ -29,27 +29,20 @@
 #
 # ============================================================
 
-import sys
+import os
 import pandas as pd
-from pathlib import Path
 
-# ============================================================
-# PROJECT STRUCTURE (projectDir-aware)
-# ============================================================
-PROJECT_DIR = Path(__file__).resolve().parent.parent
-
-INPUT_DIR  = PROJECT_DIR / "resistance"
-OUTPUT_DIR = PROJECT_DIR / "results" / "resistance"
+INPUT_DIR = "resistance"
+OUTPUT_DIR = "results/resistance"
 
 CALLER_PRIORITY = ["GATK", "NORM", "LOFREQ", "DELLY"]
 
 FINAL_COLUMNS = [
     "Drug","Gene","Tier","Variant","Effect","Evidence","Comment",
-    "AF","ALT_READS","Heteroresistance","Caller",
-    "Filter_Status","Filter_Method"
+    "AF","ALT_READS","Heteroresistance","Caller","Filter_Status","Filter_Method"
 ]
 
-EVIDENCE_MAP = {
+patterns = {
     "Assoc w R": "R",
     "Assoc w R - Interim": "r",
     "Uncertain significance": "u",
@@ -57,15 +50,17 @@ EVIDENCE_MAP = {
     "Not assoc w R": "S"
 }
 
-# ============================================================
-# HELPERS
-# ============================================================
 def convert_evidence(raw):
     if not isinstance(raw, str):
         return "S"
     if ") " in raw:
         raw = raw.split(") ", 1)[1].strip()
-    return EVIDENCE_MAP.get(raw, "S")
+    return patterns.get(raw, "S")
+
+def load_OMStarget(path):
+    if not os.path.exists(path):
+        return None
+    return pd.read_excel(path)
 
 def choose_best_caller(group):
     for caller in CALLER_PRIORITY:
@@ -77,115 +72,148 @@ def choose_best_caller(group):
 def is_mnp(ref, alt):
     return len(str(ref)) > 1 or len(str(alt)) > 1
 
-# ============================================================
-# MNP RESOLUTION LOGIC
-# ============================================================
 def resolve_mnp_span(df):
 
+    to_keep = set()
     to_remove = set()
-    mnp_rows = df[df.apply(lambda r: is_mnp(r["ref"], r["alt"]), axis=1)]
 
-    for idx, mnp in mnp_rows.iterrows():
-        start = mnp["position"]
-        end   = start + len(str(mnp["ref"])) - 1
-        mnp_het = (mnp["zygosity"] == "HET")
+    #mnp_rows = df[df.apply(lambda r: is_mnp(r["ref"], r["alt"]), axis=1)]
+    mnp_rows = df[(df["ref"].str.len() > 1) | (df["alt"].str.len() > 1)]
+
+    for mnp_idx, mnp in mnp_rows.iterrows():
+        mnp_start = mnp["position"]
+        mnp_end = mnp["position"] + len(str(mnp["ref"])) - 1
+        mnp_is_het = (mnp["zygosity"] == "HET")
 
         snps = df[
-            (df["position"] >= start) &
-            (df["position"] <= end) &
-            (~df.apply(lambda r: is_mnp(r["ref"], r["alt"]), axis=1))
+            (df["position"] >= mnp_start) &
+            (df["position"] <= mnp_end) &
+            ~((df["ref"].str.len() > 1) | (df["alt"].str.len() > 1))
+            #(~df.apply(lambda r: is_mnp(r["ref"], r["alt"]), axis=1))
         ]
 
         if snps.empty:
+            to_keep.add(mnp_idx)
             continue
 
-        if not mnp_het and not any(snps["zygosity"] == "HET"):
-            to_remove.update(snps.index)
-        elif mnp_het:
+        snps_het = snps[snps["zygosity"] == "HET"]
+        snps_hom = snps[snps["zygosity"] == "HOM"]
+
+        if not mnp_is_het and not snps_hom.empty and snps_het.empty:
+            to_keep.add(mnp_idx)
             to_remove.update(snps.index)
 
-    return df.drop(index=to_remove)
+        elif mnp_is_het and not snps_hom.empty and snps_het.empty:
+            to_keep.add(mnp_idx)
+            to_remove.update(snps.index)
+
+        elif not mnp_is_het and not snps_het.empty and snps_hom.empty:
+            to_keep.add(mnp_idx)
+            to_keep.update(snps_het.index)
+            to_remove.update(snps_hom.index)
+
+        elif mnp_is_het and not snps_het.empty:
+            to_keep.add(mnp_idx)
+            to_remove.update(snps.index)
+
+        else:
+            to_keep.add(mnp_idx)
+            if not mnp_is_het:
+                to_keep.update(snps_het.index)
+            to_remove.update(snps_hom.index)
+
+    final_idx = set(df.index) - to_remove
+    return df.loc[sorted(final_idx)].copy()
 
 def resolve_mnp_vs_snp(df):
-    out = []
+    result = []
     for pos, group in df.groupby("position"):
         if any(group["zygosity"] == "HET"):
-            out.append(group)
+            result.append(group)
             continue
 
-        mnp = group[group.apply(lambda r: is_mnp(r["ref"], r["alt"]), axis=1)]
-        snp = group[~group.index.isin(mnp.index)]
+        #mnp_mask = group.apply(lambda r: is_mnp(r["ref"], r["alt"]), axis=1)
+        mnp_mask = (group["ref"].str.len() > 1) | (group["alt"].str.len() > 1)
+        snp_mask = ~mnp_mask
 
-        if not mnp.empty and not snp.empty:
-            out.append(mnp)
+        if mnp_mask.any() and snp_mask.any():
+            result.append(group[mnp_mask])
         else:
-            out.append(group)
+            result.append(group)
 
-    return pd.concat(out, ignore_index=True)
+    return pd.concat(result, ignore_index=True)
 
-# ============================================================
-# CORE PROCESS
-# ============================================================
 def process_biosample(biosample):
 
-    input_xlsx  = INPUT_DIR / biosample / f"{biosample}_OMStarget.xlsx"
-    output_xlsx = OUTPUT_DIR / f"{biosample}.xlsx"
-
-    # ===================== SKIP =====================
-    if output_xlsx.exists():
-        print(f"[SKIP] Final resistance report already exists → {output_xlsx}")
+    path = os.path.join(INPUT_DIR, biosample, f"{biosample}_OMStarget.xlsx")
+    df = load_OMStarget(path)
+    if df is None or df.empty:
+        print(f"[WARN] No OMStarget for {biosample}")
         return
 
-    # ===================== FAIL FAST =====================
-    if not input_xlsx.exists():
-        print(f"[ERROR] Required input not found: {input_xlsx}")
-        sys.exit(1)
-
-    print(f"[RUN] Generating resistance report for {biosample}")
-    df = pd.read_excel(input_xlsx)
-
     if df.empty:
-        print(f"[ERROR] OMStarget is empty: {input_xlsx}")
-        sys.exit(1)
+        print(f"[WARN] No variants for {biosample}")
+        return
 
-    # ===================== CLEANING =====================
     df = resolve_mnp_span(df)
     df = resolve_mnp_vs_snp(df)
 
-    # ===================== COLUMN MAPPING =====================
-    df["Drug"]  = df["drug"].astype(str)
-    df["Gene"]  = df["gene"].astype(str)
-    df["Tier"]  = df["tier"]
-    df["Variant"] = df["master_change"]
-    df["Effect"]  = df["effect"]
+    df["Drug"] = df["drug"].astype(str)
+    df["Gene"] = df["gene"].astype(str)
+    df["Tier"] = df["tier"]
+
+
+    # --------------------------------------------------------
+    # Normalize NA
+    # --------------------------------------------------------
+    df[["aa_change","master_change","nt_change"]] = df[
+        ["aa_change","master_change","nt_change"]
+    ].fillna("NA")
+
+    # --------------------------------------------------------
+    # Variant priority
+    # aa_change > master_change > nt_change
+    # --------------------------------------------------------
+    df["Variant"] = df["aa_change"]
+
+    mask = df["Variant"] == "NA"
+    df.loc[mask, "Variant"] = df.loc[mask, "master_change"]
+
+    mask = df["Variant"] == "NA"
+    df.loc[mask, "Variant"] = df.loc[mask, "nt_change"]
+
+    df["Effect"] = df["effect"]
     df["Evidence"] = df["FINAL CONFIDENCE GRADING"].apply(convert_evidence)
-    df["Comment"]  = df["Comment"]
-    df["AF"]       = df["AF"]
+    df["Comment"] = df["Comment"]
+    df["AF"] = df["AF"]
     df["ALT_READS"] = df["ALT_reads"]
     df["Heteroresistance"] = df["zygosity"]
-    df["Caller"]   = df["caller"]
+    df["Caller"] = df["caller"]
     df["Filter_Status"] = df["Filter_Status"]
     df["Filter_Method"] = df["Filter_Method"]
 
-    # ===================== DEDUPLICATION =====================
     final_rows = []
-    for _, group in df.groupby(["Drug", "Variant"]):
-        final_rows.append(choose_best_caller(group))
+    for _, group in df.groupby(["Drug", "Gene", "Variant"], dropna=False):
+        best = choose_best_caller(group)
+        final_rows.append(best)
 
     final = pd.DataFrame(final_rows)[FINAL_COLUMNS]
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    final.to_excel(output_xlsx, index=False)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    outfile = os.path.join(OUTPUT_DIR, f"{biosample}.xlsx")
+    final.to_excel(outfile, index=False)
 
-    print(f"[OK] Final resistance report written → {output_xlsx}")
+    print(f"[OK] {outfile}")
 
-# ============================================================
 def main():
+
+    import sys
     if len(sys.argv) != 2:
         print("Usage: python3 resistanceReport.py <biosample>")
-        sys.exit(1)
+        return
 
-    process_biosample(sys.argv[1])
+    biosample = sys.argv[1]
+    process_biosample(biosample)
 
 if __name__ == "__main__":
     main()

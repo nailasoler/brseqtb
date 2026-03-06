@@ -14,26 +14,13 @@ import pysam
 import os
 import sys
 
-# ============================================================
-# PROJECT DIR (script always lives in bin/)
-# ============================================================
-
-PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-
-# ============================================================
-# CONSTANTS / PATHS (UNCHANGED LOGIC)
-# ============================================================
-
 REFERENCE_NAME = "NC_000962.3"
-
-CATALOG_DIR = os.path.join(PROJECT_DIR, "database", "omsCatalog")
+CATALOG_DIR = "database/omsCatalog"
 CATALOG_GENOMIC_COORDS = os.path.join(CATALOG_DIR, "tbdr_genomic_coordinates.csv")
 CATALOG_MASTER = os.path.join(CATALOG_DIR, "tbdr_catalogue_master_file.csv")
-
-FILTER_EXCEL = os.path.join(PROJECT_DIR, "cohort", "filter", "filter.xlsx")
-
-SNPEFF_BASE = os.path.join(PROJECT_DIR, "snpeff")
-RESULTS_BASE = os.path.join(PROJECT_DIR, "resistance")
+FILTER_EXCEL = "cohort/filter/filter.xlsx"
+SNPEFF_BASE = "snpeff"
+RESULTS_BASE = "resistance"
 
 VCF_CALLERS = {
     "gatk": "_gatk.vcf.gz",
@@ -217,16 +204,14 @@ def matching(df_ann, coord_file_path, master_file_path):
     nt_match = df_ann.merge(master, left_on="nt_change", right_on="variant", how="left")
     nt_match["match_method"] = None
     nt_match.loc[
-        (nt_match["drug"].notna()) & (~coord_match["drug"].notna()),
+        nt_match["drug"].notna(),
         "match_method"
     ] = "nt_change"
 
     aa_match = df_ann.merge(master, left_on="aa_change", right_on="variant", how="left")
     aa_match["match_method"] = None
     aa_match.loc[
-        (aa_match["drug"].notna()) &
-        (~coord_match["drug"].notna()) &
-        (~nt_match["drug"].notna()),
+        aa_match["drug"].notna(),
         "match_method"
     ] = "aa_change"
 
@@ -236,7 +221,7 @@ def matching(df_ann, coord_file_path, master_file_path):
         aa_match[aa_match["match_method"]=="aa_change"]
     ])
 
-    #final = final.drop_duplicates(subset=["position","ref","alt"])
+    final["master_change"] = final["master_change"].fillna("NA")
 
     final = final.dropna(subset=[
         "drug","variant","tier","effect","FINAL CONFIDENCE GRADING"
@@ -256,7 +241,7 @@ def matching(df_ann, coord_file_path, master_file_path):
 
 def gatk_norm_failures(record):
     failures = []
-    DP = record.info.get("DP", 0)
+    DP = record.info.get("DP") or record.samples[0].get("DP") or 0
     QUAL = record.qual if record.qual else 0
     QD = QUAL / DP if DP > 0 else 0
     if DP < 10: failures.append("DP_FAIL")
@@ -322,6 +307,13 @@ def filtering(df_res, filter_excel, vcf_path):
             if r.pos == pos and alt in (r.alts or []):
                 record = r
                 break
+
+        # ===== TEST DP =====
+        #if record is not None:
+        #    DP_test = record.info.get("DP") or record.samples[0].get("DP") or 0
+        #    print(f"DEBUG DP TEST pos={pos} alt={alt} DP={DP_test}")
+        #    print("INFO_DP:", record.info.get("DP"), "FORMAT_DP:", record.samples[0].get("DP"))
+        # ====================
 
         if record is None:
             fail = "NO_RECORD"
@@ -413,30 +405,7 @@ def main():
     biosample = sys.argv[1]
     sample_dir = os.path.join(SNPEFF_BASE, biosample)
 
-    # ============================================================
-    # STRICT VALIDATION — ALL CALLERS REQUIRED
-    # ============================================================
-
-    missing = []
-
-    for caller, suffix in VCF_CALLERS.items():
-        vcf_path = os.path.join(sample_dir, f"{biosample}{suffix}")
-        if not os.path.exists(vcf_path):
-            missing.append(vcf_path)
-
-    if missing:
-        print("[ERROR] Missing required VCF files:")
-        for m in missing:
-            print(f"  - {m}")
-        print("[ABORT] Resistance profiling requires ALL callers (gatk, norm, lofreq, delly).")
-        sys.exit(1)
-
-    # ============================================================
-    # CONTINUE NORMAL EXECUTION
-    # ============================================================
-
     print(f"[INFO] Scanning VCFs in {sample_dir}")
-
 
     merged_targets = []
 
